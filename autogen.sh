@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # run aclocal
-aclocal
+aclocal -Im4/
 
 # run autoconf
 autoconf
