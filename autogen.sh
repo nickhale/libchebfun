@@ -23,6 +23,9 @@ aclocal -Im4/
 # run autoconf
 autoconf
 
+# run autoheader to generate config.h.in
+autoheader
+
 # run automake
 automake --add-missing
 
