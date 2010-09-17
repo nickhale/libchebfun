@@ -103,9 +103,14 @@ int fun_scale ( struct fun *A , double w , struct fun *B );
 double fun_integrate ( struct fun *fun );
 int fun_mul ( struct fun *A , struct fun *B , struct fun *C );
 int fun_init( struct fun *fun , unsigned int N );
+int _fun_alloc ( struct fun *fun , unsigned int N );
 int fun_create_vals( struct fun *fun , double *vals , double a , double b , unsigned int N );
 int fun_create_coeffs( struct fun *fun , double *coeffs , double a , double b , unsigned int N );
 int fun_rescale ( struct fun *fun );
 double fun_norm2 ( struct fun *fun );
 int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun );
+int fun_simplify ( struct fun *fun, double tol );
+int fun_restrict ( struct fun *fun , double A , double B );
+int fun_roots_unit ( struct fun *fun );
+

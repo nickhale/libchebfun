@@ -36,7 +36,7 @@
  
 double myfun ( double x , void *data ) {
 
-    return sin( 4.0 * M_PI * x );
+    return sin( x + 0.1 );
 
     }
 
@@ -63,7 +63,7 @@ int myfun_vec ( const double *x , unsigned int N , double *out , void *data ) {
     int k;
 
     for ( k = 0 ; k < N ; k++ )
-        out[k] = sin( 4.0 * x[k] + 1.0);
+        out[k] = sin( x[k] + 0.1 );
 
     return 0;
 
@@ -79,7 +79,7 @@ int myfun_vec_prime ( const double *x , unsigned int N , double *out , void *dat
     int k;
 
     for ( k = 0 ; k < N ; k++ )
-        out[k] = 4.0 * cos( 4.0 * x[k] + 1.0);
+        out[k] = cos( x[k] + 0.1 );
 
     return 0;
 
@@ -155,6 +155,12 @@ int main ( int argc , char *argv[] ) {
     fun_add ( &f1 , &f4 , &f4 );
     printf("||f-f4||_2 = %e\n", fun_norm2( &f4 ));
     fun_clean( &f4 );
+
+    fun_display( &f1 );
+    fun_restrict( &f1 , 0.0 , 1.0 );
+    fun_display( &f1 );
+
+    fun_roots_unit ( &f1 );  
   
     /* Clean-up the fun. */
     if ( fun_clean( &f1 ) < 0 )

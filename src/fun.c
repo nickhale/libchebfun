@@ -51,6 +51,155 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
 
 
 /**
+ * @brief Restrict a fun to a subinterval of its domain
+ *
+ * @param fun The #fun which needs restricting.
+ * @param A The new left endpoint.
+ * @param B The new right endpoint.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_restrict ( struct fun *fun , double A , double B ) {
+    
+    double iba = 1.0/(fun->b-fun->a);
+    int j;
+    
+    /* Check inputs. */
+    if ( fun == NULL )
+        return fun_err = fun_err_null;
+/*    if (fun->a > A || fun->b < B)
+        <ERROR: INCONSISTENT DOMAIN> */
+    
+    for (j = 0 ; j < fun->n ; j++ )
+        fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) *iba;
+    /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
+
+    /* Get the restricted values. */
+    fun_eval_clenshaw_vec ( fun , fun->points , fun->n ,  fun->vals.real );
+
+    /* Get the coefficients. */
+    util_chebpoly ( fun->vals.real  , fun->n , fun->coeffs.real );
+
+    /* Simplify */
+    fun_simplify( fun , 0.0 ); 
+        
+    /* End on a good note. */
+    return fun_err_ok;
+    
+    }
+
+
+/**
+ * @brief Simplify a fun (remove trailing coefficients below tolerance).
+ *      We simply call util_simplify. AT THE MOMENT TOL IS IGNORED!
+ *
+ * @param fun The fun the be simplified.
+ * @param tol Tolerance
+ * @return The expected number of points necessary for the accurate
+ *      representation of the function or < 0 on error. If the
+ *      interpolation is not converged, @a N is returned.
+ */
+
+
+int fun_simplify ( struct fun *fun , double tol) {
+    
+    const struct chebopts *opts;
+    unsigned int N;
+    struct fun tmpfun = FUN_EMPTY;
+
+    /* Check inputs. */
+    if ( fun == NULL )
+        return fun_err = fun_err_null;
+
+    /* Call util_simplify */
+    opts = &chebopts_default;
+    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , opts );      
+
+    /* Store in a new fun if simplify was sucessful. */
+    if ( N < fun->n ) {
+        _fun_alloc( &tmpfun , N );
+        util_chebpts( N, tmpfun.points );
+        memcpy( tmpfun.vals.real , fun->vals.real , sizeof(double) * N );
+        memcpy( tmpfun.coeffs.real , fun->coeffs.real , sizeof(double) * N );
+        fun_clean( fun );
+        fun = &tmpfun;
+    }
+
+    /* Sweet. */
+    return fun_err_ok;
+    
+    }
+
+
+/**
+ * @brief Compute the roots of a fun assuming it is on the unit interval.
+ *
+ * @param fun The #fun to find roots of.
+ *
+ * @return a vector containing the roots.
+ */
+ 
+int fun_roots_unit ( struct fun *fun ) {
+
+    double *A, cN;
+    unsigned int N;
+    int j,k;
+    
+    /* Check inputs. */
+    if ( fun == NULL )
+        return fun_err = fun_err_null;
+    
+    /* Remove small trailing coefficients */
+    _fun_rescale ( fun );
+    N = fun->n-1;
+    if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale) {
+        while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
+            N--;
+        }
+    cN = -0.5 / fun->coeffs.real[N];
+        
+    /* Initialize the vector A.
+       Allocation is done on the stack, so we don't need to worry about
+       releasing these if the routine fails anywhere underway.
+       Note that A is padded with 16 bytes so that it can be
+       shifted and aligned to 16-byte boundaries. */
+    if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
+        return fun_err = fun_err_malloc;
+        
+    /* Shift A so that it is 16-byte aligned. */
+    A = (double *)( (((size_t)A) + 15 ) & ~15 );
+
+    /* Zero out A */
+    bzero( A , sizeof(double) * ( N * N ) );
+
+    /* Assign the super- and sub-diagonal */
+    for (j = 0 ; j < N ; j++)
+        A[N-j-1] = cN * fun->coeffs.real[j];
+    A[2] += 0.5;
+
+    /* Assign the coefficients to the first column */
+    for (j = N ; j < N*(N-1) ; j += N+1) {
+        A[j] = 0.5;
+        A[j+2] = 0.5;
+        }
+    A[N*N-2] = 0.5;
+    
+    /* Print the matrix (for testing only) */
+    for (k = 0 ; k < N ; k++) {
+        for (j = 0 ; j < N ; j++) {
+            printf("%e   ", A[j*N + k]);
+            }
+        printf("\n");
+        }
+        
+    /* Sweet. */
+    return fun_err_ok;
+    
+    }
+
+
+/**
  * @brief Compute the norm of a real valued function
  *
  * @param fun The #fun which needs re-scaling.
@@ -243,6 +392,35 @@ int fun_init ( struct fun *fun , unsigned int N ) {
         return fun_err;
         
     /* Allocate the data inside the fun to the correct size. */
+    _fun_alloc( fun , N);
+
+    /* Set entries to zero. Is this needed? */
+    bzero( fun->vals.real , sizeof(double) * N );
+    bzero( fun->coeffs.real , sizeof(double) * N );
+    
+    /* Get the Chebyshev nodes. */
+    util_chebpts( N , fun->points );
+        
+    /* Jolly good! */
+    return fun_err_ok;
+    
+    }
+
+/**
+ * @brief Allocate space for a fun to be filled with values.
+ *     This differs slightly from fun_init in that it doesn't
+ *     zero out entries or assign points.
+ *
+ * @param fun The #fun structure to be initialized.
+ * @param N The size of the #fun.
+ *
+ * @return #fun_err_ok or < 0 on error.
+ *
+ */
+
+int _fun_alloc ( struct fun *fun , unsigned int N ) {
+
+    /* Allocate the data inside the fun to the correct size. */
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
          posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
          ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
@@ -251,13 +429,6 @@ int fun_init ( struct fun *fun , unsigned int N ) {
     /* Write the data to the fun. */
     fun->n = N;
     fun->flags = fun_flag_init;
-
-    /* Set entries to zero. Is this needed? */
-    bzero( fun->vals.real , sizeof(double) * N );
-    bzero( fun->coeffs.real , sizeof(double) * N );
-    
-    /* Get the Chebyshev nodes. */
-    util_chebpts( N , fun->points );
         
     /* Jolly good! */
     return fun_err_ok;
@@ -343,7 +514,7 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
     return fun_err_ok;
     
     } 
-    
+
     
 /**
  * @brief Differentiate a fun.
