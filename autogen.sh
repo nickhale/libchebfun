@@ -24,5 +24,5 @@ aclocal -Im4/
 autoconf
 
 # run automake
-automake
+automake --add-missing
 
