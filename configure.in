@@ -1,0 +1,73 @@
+
+dnl This file is part of libchebfun.
+dnl Coypright (c) 2010 The Chebfun Team.
+dnl 
+dnl This program is free software: you can redistribute it and/or modify
+dnl it under the terms of the GNU General Public License as published by
+dnl the Free Software Foundation, either version 3 of the License, or
+dnl (at your option) any later version.
+dnl 
+dnl This program is distributed in the hope that it will be useful,
+dnl but WITHOUT ANY WARRANTY; without even the implied warranty of
+dnl MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+dnl GNU General Public License for more details.
+dnl 
+dnl You should have received a copy of the GNU General Public License
+dnl along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+dnl init the project
+AC_INIT(src/fun.c)
+VERSION="0.0.1"
+AC_SUBST(VERSION)
+AM_INIT_AUTOMAKE(libchebfun,VERSION)
+AC_PROG_LIBTOOL
+
+dnl generate header file
+AM_CONFIG_HEADER(config.h)
+
+dnl compiler settings
+CFLAGS=-Wall
+
+dnl find and test the compiler
+AC_PROG_CC
+AC_LANG_C
+
+dnl autoconf stuff
+AC_PROG_INSTALL
+AC_PROG_MAKE_SET
+AC_HEADER_STDC
+
+dnl Make sure LAPACK and BLAS are installed
+AX_BLAS(,AC_MSG_ERROR([Headers for BLAS not found.
+    Make sure you have the library and header files installed
+    or use the option "--with-blas=<lib>" if the library
+    is installed in a non-standard location.]))
+AX_LAPACK(,AC_MSG_ERROR([Headers for LAPACK not found.
+    Make sure you have the library and header files installed
+    or use the option "--with-lapack=<lib>" if the library
+    is installed in a non-standard location.]))
+
+dnl check for the libraries we will need
+AC_CHECK_LIB(m,sqrt,,AC_MSG_ERROR(something is wrong with the math library!))
+AC_CHECK_HEADER(complex.h,,AC_MSG_ERROR(no ISO C99 complex numbers!))
+AC_CHECK_LIB(fftw3,main,,AC_MSG_ERROR([libfftw3 is required to compile libchebfun.
+    You can download a copy at http://www.libfftw.org/.
+    Use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
+AC_CHECK_HEADER(fftw3.h,,AC_MSG_ERROR([Headers for fftw3 not found.
+    Use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
+
+dnl set the version
+VERSION="0.0.1"
+AC_SUBST(VERSION)
+
+dnl make the documentation
+DX_INIT_DOXYGEN(libchebfun,doc/Doxyfile,doc/)
+
+dnl generate the Makefiles
+AC_OUTPUT(Makefile src/Makefile examples/Makefile doc/Makefile)
+
+dnl do the same magic in other directories
+dnl AC_CONFIG_SUBDIRS(src examples)
+
