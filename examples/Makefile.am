@@ -22,18 +22,18 @@ AUTOMAKE_OPTIONS=gnu
 AM_CFLAGS = -g -I../src
 
 # Set-up the library
-bin_PROGRAMS = fun_test test_pedro test_nick
+bin_PROGRAMS = fun_test pedro_test nick_test
 
 # Sources for fun_test
 fun_test_SOURCES = fun_test.c
 fun_test_LDADD = ../src/.libs/libchebfun.a
 
-# Sources for test_pedro
-test_pedro_SOURCES = test_pedro.c
-test_pedro_LDADD = ../src/.libs/libchebfun.a
+# Sources for pedro_test
+pedro_test_SOURCES = pedro_test.c
+pedro_test_LDADD = ../src/.libs/libchebfun.a
 
-# Sources for test_nick
-test_nick_SOURCES = test_nick.c
-test_nick_LDADD = ../src/.libs/libchebfun.a
+# Sources for nick_test
+nick_test_SOURCES = nick_test.c
+nick_test_LDADD = ../src/.libs/libchebfun.a
 
 
