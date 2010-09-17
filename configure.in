@@ -38,14 +38,22 @@ AC_PROG_MAKE_SET
 AC_HEADER_STDC
 
 dnl Make sure LAPACK and BLAS are installed
-AX_BLAS(,AC_MSG_ERROR([Headers for BLAS not found.
+AC_CHECK_LIB(blas,dgemv_,,AC_MSG_ERROR([BLAS not found.
     Make sure you have the library and header files installed
-    or use the option "--with-blas=<lib>" if the library
-    is installed in a non-standard location.]))
-AX_LAPACK(,AC_MSG_ERROR([Headers for LAPACK not found.
+    or use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
+AC_CHECK_LIB(lapack,dgbsv_,,AC_MSG_ERROR([LAPACK not found.
     Make sure you have the library and header files installed
-    or use the option "--with-lapack=<lib>" if the library
-    is installed in a non-standard location.]))
+    or use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
+AC_CHECK_HEADER(cblas.h,,AC_MSG_ERROR([BLAS headers not found.
+    Make sure you have the library and header files installed
+    or use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
+AC_CHECK_HEADER(clapack.h,,AC_MSG_ERROR([LAPACK headers not found.
+    Make sure you have the library and header files installed
+    or use CPPFLAGS and LDFLAGS if the library is installed in a
+    non-standard location.]))
 
 dnl check for the libraries we will need
 AC_CHECK_LIB(m,sqrt,,AC_MSG_ERROR(something is wrong with the math library!))
@@ -57,10 +65,9 @@ AC_CHECK_LIB(fftw3,main,,AC_MSG_ERROR([libfftw3 is required to compile libchebfu
 AC_CHECK_HEADER(fftw3.h,,AC_MSG_ERROR([Headers for fftw3 not found.
     Use CPPFLAGS and LDFLAGS if the library is installed in a
     non-standard location.]))
-
-dnl set the version
-VERSION="0.0.1"
-AC_SUBST(VERSION)
+    
+dnl Check for gnuplot
+AC_CHECK_PROG(HAVE_GNUPLOT,gnuplot)
 
 dnl make the documentation
 DX_INIT_DOXYGEN(libchebfun,doc/Doxyfile,doc/)
