@@ -23,6 +23,7 @@
 #include <complex.h>
 #include <math.h>
 #include <string.h>
+#include <clapack.h>
 
 /* Local includes. */
 #include "chebopts.h"
@@ -48,6 +49,39 @@ const char *fun_err_msg[] = {
     
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
+
+
+/**
+ * @brief Copy data from one fun to another
+ *
+ * @param fun The #fun to be copied.
+ * @param fun2 The #fun to copy into.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_copy ( struct fun *fun , struct fun *fun2 ) {
+
+    /* Check inputs. */
+    if ( fun == NULL || fun2 == NULL)
+        return fun_err = fun_err_null;
+/*    if (fun->n != fun2->n)
+        <ERROR: FUN.N SHOULD BE THE SAME> */
+    
+    /* Copy the data */
+    fun2->a = fun->a;
+    fun2->b = fun->b;
+    fun2->scale = fun->scale;
+    fun2->flags = fun->flags;
+
+    memcpy( fun2->points , fun->points , sizeof(double) * fun->n );
+    memcpy( fun2->vals.real , fun->vals.real , sizeof(double) * fun->n );
+    memcpy( fun2->coeffs.real , fun->coeffs.real , sizeof(double) * fun->n );
+      
+    /* End on a good note. */
+    return fun_err_ok;
+    
+    }
 
 
 /**
@@ -109,21 +143,25 @@ int fun_simplify ( struct fun *fun , double tol) {
     struct fun tmpfun = FUN_EMPTY;
 
     /* Check inputs. */
-    if ( fun == NULL )
+    if ( fun == NULL ) {
+        printf("confused\n");
         return fun_err = fun_err_null;
+        }
 
     /* Call util_simplify */
     opts = &chebopts_default;
     N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , opts );      
 
-    /* Store in a new fun if simplify was sucessful. */
+    /* Store in a new fun if simplify was successful. */
     if ( N < fun->n ) {
         _fun_alloc( &tmpfun , N );
-        util_chebpts( N, tmpfun.points );
+//        util_chebpts( N, tmpfun.points );
+        memcpy( tmpfun.points , fun->points , sizeof(double) * N );
         memcpy( tmpfun.vals.real , fun->vals.real , sizeof(double) * N );
         memcpy( tmpfun.coeffs.real , fun->coeffs.real , sizeof(double) * N );
         fun_clean( fun );
-        fun = &tmpfun;
+        _fun_alloc( fun , N );
+        fun_copy ( &tmpfun , fun );
     }
 
     /* Sweet. */
@@ -142,58 +180,126 @@ int fun_simplify ( struct fun *fun , double tol) {
  
 int fun_roots_unit ( struct fun *fun ) {
 
-    double *A, cN;
+    double *A, cN, c = -0.004849834917525;
     unsigned int N;
-    int j,k;
+    int j, k;
+
+    struct fun funL = FUN_EMPTY, funR = FUN_EMPTY;
     
     /* Check inputs. */
     if ( fun == NULL )
         return fun_err = fun_err_null;
-    
-    /* Remove small trailing coefficients */
-    _fun_rescale ( fun );
-    N = fun->n-1;
-    if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale) {
+
+    printf("n = %i\n",fun->n);
+
+    if (fun->n < 101) {
+    /* Solve the eigenvalue problem. */
+
+        /* Remove small trailing coefficients */
+        fun_rescale ( fun );
+        N = fun->n-1;
+        if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale) {
         while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
             N--;
-        }
-    cN = -0.5 / fun->coeffs.real[N];
-        
-    /* Initialize the vector A.
-       Allocation is done on the stack, so we don't need to worry about
-       releasing these if the routine fails anywhere underway.
-       Note that A is padded with 16 bytes so that it can be
-       shifted and aligned to 16-byte boundaries. */
-    if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
-        return fun_err = fun_err_malloc;
-        
-    /* Shift A so that it is 16-byte aligned. */
-    A = (double *)( (((size_t)A) + 15 ) & ~15 );
-
-    /* Zero out A */
-    bzero( A , sizeof(double) * ( N * N ) );
-
-    /* Assign the super- and sub-diagonal */
-    for (j = 0 ; j < N ; j++)
-        A[N-j-1] = cN * fun->coeffs.real[j];
-    A[2] += 0.5;
-
-    /* Assign the coefficients to the first column */
-    for (j = N ; j < N*(N-1) ; j += N+1) {
-        A[j] = 0.5;
-        A[j+2] = 0.5;
-        }
-    A[N*N-2] = 0.5;
-    
-    /* Print the matrix (for testing only) */
-    for (k = 0 ; k < N ; k++) {
-        for (j = 0 ; j < N ; j++) {
-            printf("%e   ", A[j*N + k]);
             }
-        printf("\n");
-        }
+        cN = -0.5 / fun->coeffs.real[N];
+            
+        /* Initialize the vector A.
+           Allocation is done on the stack, so we don't need to worry about
+           releasing these if the routine fails anywhere underway.
+           Note that A is padded with 16 bytes so that it can be
+           shifted and aligned to 16-byte boundaries. */
+        if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
+            return fun_err = fun_err_malloc;
+            
+        /* Shift A so that it is 16-byte aligned. */
+        A = (double *)( (((size_t)A) + 15 ) & ~15 );
+    
+        /* Zero out A */
+        bzero( A , sizeof(double) * ( N * N ) );
+    
+        printf("Matlab version of A (lower hess)\n");
+        /* Assign the coefficients to the first column */
+        for (j = 0 ; j < N ; j++)
+            A[N-j-1] = cN * fun->coeffs.real[j];
+        A[2] += 0.5;
+    
+        /* Assign the super- and sub-diagonal */
+        for (j = N ; j < N*(N-1) ; j += N+1) {
+            A[j] = 0.5;
+            A[j+2] = 0.5;
+            }
+        A[N*N-2] = 0.5;
         
-    /* Sweet. */
+        /* Print the matrix (for testing only) */
+        for (k = 0 ; k < N ; k++) {
+            for (j = 0 ; j < N ; j++) {
+                printf("%e   ", A[j*N + k]);
+                }
+            printf("\n");
+            }
+
+        /* Make the transpose */
+
+        bzero( A , sizeof(double) * ( N * N ) );
+    
+        printf("Upper hess verison of A\n");
+        /* Assign the coefficients to the first column */
+        for (j = 0 ; j < N ; j++)
+            A[N*(N-1-j)] = cN * fun->coeffs.real[j];
+        A[N*(N-1)] += 0.5;
+    
+        A[1] = 0.5;
+        A[N+2] = 0.5;
+        /* Assign the super- and sub-diagonal */
+        for (j = 2*N+1 ; j < N*(N-1) ; j += N+1) {
+            A[j] = 0.5;
+            A[j+2] = 0.5;
+            }
+        A[N*N-2] = 0.5;
+
+        printf("\n\n");
+        
+        /* Print the matrix (for testing only) */
+        for (k = 0 ; k < N ; k++) {
+            for (j = 0 ; j < N ; j++) {
+                printf("%e   ", A[j*N + k]);
+                }
+            printf("\n");
+            }
+        } 
+
+    else {
+    /* Recurse. */
+
+        /* Assume unit interval */
+        if (fun->points[0] != -1.0 || fun->points[fun->n-1] != 1.0) {
+            util_chebpts( fun->n , fun->points );
+            fun->a = -1.0;
+            fun->b = 1.0;
+            }
+
+        /* Copy fun and restrict to subintervals (with magic ChebConstant c) */
+        _fun_alloc( &funL , fun->n );
+        _fun_alloc( &funR , fun->n );
+        fun_copy( fun , &funL );
+        fun_copy( fun , &funR );
+        
+        fun_restrict( &funL , -1.0, c );
+        fun_restrict( &funR , c , 1.0 );
+
+        /* Find roots recursively */
+        fun_roots_unit( &funL );
+        fun_roots_unit( &funR ); 
+
+//        out = [-1+(rootsunit(g1,rootspref)+1)*.5*(1+c)   c+(rootsunit(g2,rootspref)+1)*.5*(1-c)];        
+
+        /* Clean up */
+        fun_clean( &funL );
+        fun_clean( &funR );
+    }
+        
+    /* To the pub!. */
     return fun_err_ok;
     
     }
@@ -310,6 +416,7 @@ int fun_display ( struct fun *fun ) {
     for ( k = 0 ; k < fun->n ; k++ )
         printf("fun.points[%i]=%e \tfun.vals[%i]=%e \tfun.coeffs[%i]=%e\n",
             k, fun->points[k], k, fun->vals.real[k], k, fun->coeffs.real[k]);
+    printf("\n");
     
     /* Huzzah! */
     return fun_err_ok;

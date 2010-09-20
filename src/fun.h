@@ -113,4 +113,5 @@ int fun_display ( struct fun *fun );
 int fun_simplify ( struct fun *fun, double tol );
 int fun_restrict ( struct fun *fun , double A , double B );
 int fun_roots_unit ( struct fun *fun );
+int fun_copy ( struct fun *fun , struct fun *fun2 );
 

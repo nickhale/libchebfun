@@ -69,6 +69,21 @@ int myfun_vec ( const double *x , unsigned int N , double *out , void *data ) {
 
     }
 
+/**
+ * @brief A simple (long) vectorized function.
+ */
+ 
+int myfun_vec_long ( const double *x , unsigned int N , double *out , void *data ) {
+    
+    int k;
+
+    for ( k = 0 ; k < N ; k++ )
+        out[k] = exp( 3.0 * x[k] ) * sin( 100 * M_PI * x[k] + 0.1 );
+
+    return 0;
+
+    }
+
 
 /**
  * @brief Derivative of the above.
@@ -109,7 +124,7 @@ int myfun_vec_param ( const double *x , unsigned int N , double *out , void *dat
  
 int main ( int argc , char *argv[] ) {
 
-    struct fun f1 = FUN_EMPTY, f4 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY;
+    struct fun f1 = FUN_EMPTY, f4 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY, f5 = FUN_EMPTY;
     struct chebopts opts;
     int k, res;
     
@@ -127,6 +142,7 @@ int main ( int argc , char *argv[] ) {
     printf("||f1||_2 = %e\n", fun_norm2( &f1 ));
 
     /* Test differentiation */
+    printf("\n\nDiff:\n");
     fun_init( &fp , f1.n-1 );
     printf("fun_test: funp.n=%u\n",fp.n);
     fun_diff( &f1, &fp );
@@ -141,6 +157,7 @@ int main ( int argc , char *argv[] ) {
     fun_clean( &fp2 );
 
     /* Test construction from vals */
+    printf("\n\nVals construct:\n");
     fun_create_vals( &f4 , f1.vals.real , -1.0 , 1.0 , f1.n );
 //    fun_display( &f4 );
     fun_scale ( &f4 , -1.0 , &f4);
@@ -149,6 +166,7 @@ int main ( int argc , char *argv[] ) {
     fun_clean( &f4 );
 
     /* Test construction from coeffs */
+    printf("\n\nCoeff construct:\n");
     fun_create_coeffs( &f4 , f1.coeffs.real , -1.0 , 1.0 , f1.n );
 //    fun_display( &f4 );
     fun_scale ( &f4 , -1.0 , &f4);
@@ -156,10 +174,23 @@ int main ( int argc , char *argv[] ) {
     printf("||f-f4||_2 = %e\n", fun_norm2( &f4 ));
     fun_clean( &f4 );
 
+    printf("\n\nRestrict:\n");
     fun_display( &f1 );
     fun_restrict( &f1 , 0.0 , 1.0 );
     fun_display( &f1 );
 
+    printf("\n\nCopy:\n");
+    _fun_alloc( &f5 , f1.n );
+    fun_display( &f1 ); 
+    fun_display( &f5 );
+    fun_copy( &f1 , &f5 );
+    fun_display( &f1 );
+    fun_display( &f5 );
+    fun_clean( &f5 );
+
+    printf("\n\Roots:\n");
+    /*fun_clean( &f1 );
+    fun_create_vec( &f1 , &myfun_vec_long , -1.0 , 1.0 , &opts , NULL );*/
     fun_roots_unit ( &f1 );  
   
     /* Clean-up the fun. */
