@@ -43,7 +43,7 @@ const char *fun_err_msg[] = {
     "Something went wrong in a call to a util_* function.",
     "Something went wrong in a call to a user-supplied function.",
     "The fun has not been initialized.",
-    "The funs do not span the same domain.",
+    "The funs do not span the same domain or operation requested outside of domain.",
     "Requested operation is not yet implemented." };
     
     
@@ -58,6 +58,9 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  * @param fun2 The #fun to copy into.
  *
  * @return #fun_err_ok or < 0 if an error occured.
+ * 
+ * If @c fun2 has not been initialized, or is too small, it will be
+ * re-initialized (see #fun_init).
  */
 
 int fun_copy ( struct fun *fun , struct fun *fun2 ) {
@@ -65,19 +68,23 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
     /* Check inputs. */
     if ( fun == NULL || fun2 == NULL)
         return fun_err = fun_err_null;
-/*    if (fun->n != fun2->n)
-        <ERROR: FUN.N SHOULD BE THE SAME> */
-    
+        
+    /* If fun2 has not been initialized or is too small, re-init. */
+    if ( !(fun2->flags & fun_flag_init) || fun2->n < fun->n )
+        if ( fun_init( fun2 , fun->n ) < 0 )
+            return fun_err;
+            
     /* Copy the data */
     fun2->a = fun->a;
     fun2->b = fun->b;
     fun2->scale = fun->scale;
     fun2->flags = fun->flags;
 
+    /* Copy the values. */
     memcpy( fun2->points , fun->points , sizeof(double) * fun->n );
     memcpy( fun2->vals.real , fun->vals.real , sizeof(double) * fun->n );
     memcpy( fun2->coeffs.real , fun->coeffs.real , sizeof(double) * fun->n );
-      
+        
     /* End on a good note. */
     return fun_err_ok;
     
@@ -92,22 +99,25 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
  * @param B The new right endpoint.
  *
  * @return #fun_err_ok or < 0 if an error occured.
+ *
+ * Note that both @c A and @c B must be within the domain of @c fun.
  */
 
 int fun_restrict ( struct fun *fun , double A , double B ) {
     
-    double iba = 1.0/(fun->b-fun->a);
+    double iba;
     int j;
     
     /* Check inputs. */
     if ( fun == NULL )
         return fun_err = fun_err_null;
-/*    if (fun->a > A || fun->b < B)
-        <ERROR: INCONSISTENT DOMAIN> */
+    if ( fun->a > A || fun->b < B )
+        return fun_err = fun_err_domain;
     
+    /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
+    iba = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
         fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) *iba;
-    /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
 
     /* Get the restricted values. */
     fun_eval_clenshaw_vec ( fun , fun->points , fun->n ,  fun->vals.real );
@@ -130,42 +140,49 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
  *
  * @param fun The fun the be simplified.
  * @param tol Tolerance
- * @return The expected number of points necessary for the accurate
- *      representation of the function or < 0 on error. If the
- *      interpolation is not converged, @a N is returned.
+ * @return The new length of the fun or < 0 on error.
  */
 
 
-int fun_simplify ( struct fun *fun , double tol) {
+int fun_simplify ( struct fun *fun , double tol ) {
     
-    const struct chebopts *opts;
     unsigned int N;
-    struct fun tmpfun = FUN_EMPTY;
+    /* struct fun tmpfun = FUN_EMPTY; */
 
     /* Check inputs. */
     if ( fun == NULL ) {
         printf("confused\n");
         return fun_err = fun_err_null;
         }
+    if ( !( fun->flags & fun_flag_init ) )
+        return fun_err = fun_err_uninit;
 
     /* Call util_simplify */
-    opts = &chebopts_default;
-    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , opts );      
+    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , NULL );      
 
     /* Store in a new fun if simplify was successful. */
     if ( N < fun->n ) {
-        _fun_alloc( &tmpfun , N );
+    
+/*        _fun_alloc( &tmpfun , N );
 //        util_chebpts( N, tmpfun.points );
         memcpy( tmpfun.points , fun->points , sizeof(double) * N );
         memcpy( tmpfun.vals.real , fun->vals.real , sizeof(double) * N );
         memcpy( tmpfun.coeffs.real , fun->coeffs.real , sizeof(double) * N );
         fun_clean( fun );
         _fun_alloc( fun , N );
-        fun_copy ( &tmpfun , fun );
-    }
+        fun_copy ( &tmpfun , fun ); */
+        
+        /* Set the new size. */
+        fun->n = N;
+        
+        /* Re-create the fun in the already-allocated memory. */
+        util_chebpolyval( fun->coeffs.real , N , fun->vals.real );
+        util_chebpts( N , fun->points );
+        
+        }
 
     /* Sweet. */
-    return fun_err_ok;
+    return N;
     
     }
 
@@ -175,7 +192,7 @@ int fun_simplify ( struct fun *fun , double tol) {
  *
  * @param fun The #fun to find roots of.
  *
- * @return a vector containing the roots.
+ * @return a vector containing the roots. (Uhm... No.)
  */
  
 int fun_roots_unit ( struct fun *fun ) {
