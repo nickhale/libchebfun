@@ -43,6 +43,7 @@
 #define fun_err_uninit                  -6
 #define fun_err_domain                  -7
 #define fun_err_nyi                     -8
+#define fun_err_lapack                  -9
 
 
 /* Global, external variables. */
@@ -112,6 +113,10 @@ int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun );
 int fun_simplify ( struct fun *fun, double tol );
 int fun_restrict ( struct fun *fun , double A , double B );
-int fun_roots_unit ( struct fun *fun );
+double* fun_roots( struct fun *fun , unsigned int *nroots  );
+double* fun_roots_unit ( struct fun *fun , unsigned int *numroots );
 int fun_copy ( struct fun *fun , struct fun *fun2 );
-
+int fun_max ( struct fun *fun , double *maxy , double *maxx );
+int fun_min ( struct fun *fun , double *miny , double *minx );
+int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy , double *maxx );
+double fun_norm_inf ( struct fun *fun );

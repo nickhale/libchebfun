@@ -44,11 +44,146 @@ const char *fun_err_msg[] = {
     "Something went wrong in a call to a user-supplied function.",
     "The fun has not been initialized.",
     "The funs do not span the same domain or operation requested outside of domain.",
-    "Requested operation is not yet implemented." };
+    "Requested operation is not yet implemented." 
+    "A call to LAPACK ended badly." };
     
     
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
+
+
+/**
+ * @brief Compute the infinity norm of a fun on its domain.
+ *
+ * @param fun The #fun to take the norm of.
+ *
+ * @return the inifnity norm of the fun.
+ */
+
+double fun_norm_inf ( struct fun *fun ) {
+	
+	double miny, minx, maxy, maxx, norm;
+
+	fun_minandmax( fun , &miny , &minx , &maxy , &maxx );
+	norm = -1.0*miny;
+	if ( norm < maxy )
+		norm = maxy;
+
+    /* Well that was easy... */
+    return norm;
+	}
+
+
+/**
+ * @brief Compute the maximum of a fun on its domain.
+ *
+ * @param fun The #fun to be maximised.
+ * @param maxy The maximum function value.
+ * @param maxx The x co-ordinate for maxy.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_max ( struct fun *fun , double *maxy , double *maxx ) {
+	
+	double miny, minx;
+
+	fun_minandmax ( fun , &miny , &minx , maxy , maxx );
+	
+    /* End on a good note. */
+    return fun_err_ok;
+	}
+
+/**
+ * @brief Compute the minimum of a fun on its domain.
+ *
+ * @param fun The #fun to be minimised.
+ * @param miny The minimum function value.
+ * @param minx The x co-ordinate for miny.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_min ( struct fun *fun , double *miny , double *minx ) {
+	
+	double maxy, maxx;
+
+	fun_minandmax ( fun , miny , minx , &maxy , &maxx );
+	
+    /* End on a good note. */
+    return fun_err_ok;
+	}
+
+
+/**
+ * @brief Simultaneously compute the minimum and maxiumum of a fun on its domain.
+ *
+ * @param fun The #fun to be minimised.
+ * @param miny The minimum function value.
+ * @param minx The x co-ordinate for miny.
+ * @param maxy The maximum function value.
+ * @param maxx The x co-ordinate for maxy.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy , double *maxx ) {
+	
+    struct fun fp = FUN_EMPTY;
+	double *roots, *vals, valR;
+	int j;
+	unsigned int nroots;
+
+	/* Compute the derivative */
+	fun_init( &fp , fun->n-1 );
+	fun_diff( fun , &fp );
+
+	/* Roots fo the derivative */
+	roots = fun_roots( &fp , &nroots );
+
+	/* Evaluate the function at these roots */
+	if ( ( vals = (double *)alloca( sizeof(double) * (nroots) + 16 ) ) == NULL )
+        return fun_err = fun_err_malloc;
+    vals = (double *)( (((size_t)vals) + 15 ) & ~15 );
+	fun_eval_clenshaw_vec ( fun , roots , nroots , vals );
+	
+	/* Find the maximum */
+	*miny = fun_eval_clenshaw( fun , fun->a ); 
+	*minx = fun->a;
+	for ( j = 0 ; j < nroots ; j++ ) {
+		if ( vals[j] < *miny ) {
+			*miny = vals[j];
+			*minx = roots[j];
+			}
+		}
+	valR = fun_eval_clenshaw( fun , fun->b );
+	if ( valR < *miny ) {
+		*miny = valR;
+		*minx = fun->b;
+		}
+
+	/* Find the maximum */
+	*maxy = fun_eval_clenshaw( fun , fun->a ); 
+	*maxx = fun->a;
+	for ( j = 0 ; j < nroots ; j++ ) {
+		if ( vals[j] > *maxy ) {
+			*maxy = vals[j];
+			*maxx = roots[j];
+			}
+		}
+	valR = fun_eval_clenshaw( fun , fun->b );
+	if ( valR > *maxy ) {
+		*maxy = valR;
+		*maxx = fun->b;
+		}
+
+	/* Be free! */
+	free( roots );
+	fun_clean( &fp );
+	
+    /* End on a good note. */
+    return fun_err_ok;
+	}
 
 
 /**
@@ -126,6 +261,7 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
     util_chebpoly ( fun->vals.real  , fun->n , fun->coeffs.real );
 
     /* Simplify */
+// NEED TO PASS A SENSIBLE TOLERANCE
     fun_simplify( fun , 0.0 ); 
         
     /* End on a good note. */
@@ -136,14 +272,14 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
 
 /**
  * @brief Simplify a fun (remove trailing coefficients below tolerance).
- *      We simply call util_simplify. AT THE MOMENT TOL IS IGNORED!
+ *      We simply call util_simplify. 
  *
  * @param fun The fun the be simplified.
  * @param tol Tolerance
  * @return The new length of the fun or < 0 on error.
  */
 
-
+// AT THE MOMENT TOL IS IGNORED!
 int fun_simplify ( struct fun *fun , double tol ) {
     
     unsigned int N;
@@ -186,28 +322,52 @@ int fun_simplify ( struct fun *fun , double tol ) {
     
     }
 
+/**
+ * @brief Compute the roots of a fun.
+ *
+ * @param fun The #fun to find roots of.
+ * @param nroots The number of roots.
+ *
+ * @return a vector containing the roots.
+ */
+ 
+double* fun_roots( struct fun *fun , unsigned int *nroots ) {
+	
+	int k;
+	double *roots, scl = 0.5 * (fun->b - fun->a);
+		
+
+	roots = fun_roots_unit( fun , nroots );
+	if ( fun->a != -1.0 || fun->b != 1.0 )
+	for ( k = 0 ; k < *nroots ; k++ )
+		roots[k] = ( roots[k] - 1.0 )*scl + fun->a;
+
+	return roots;
+	}
+
 
 /**
  * @brief Compute the roots of a fun assuming it is on the unit interval.
  *
  * @param fun The #fun to find roots of.
+ * @param nroots The number of roots.
  *
- * @return a vector containing the roots. (Uhm... No.)
+ * @return a vector containing the roots.
  */
  
-int fun_roots_unit ( struct fun *fun ) {
+double* fun_roots_unit ( struct fun *fun , unsigned int *nroots ) {
 
-    double *A, cN, c = -0.004849834917525;
-    unsigned int N;
+    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, *roots, *rootsL, *rootsR, tol;
+    unsigned int N, nrootsL, nrootsR;
     int j, k;
-
+	char job = 'E', compz = 'N';
+	int ilo, ihi, ldh, ldz, lwork, ok;
+	const struct chebopts *opts;
     struct fun funL = FUN_EMPTY, funR = FUN_EMPTY;
     
     /* Check inputs. */
     if ( fun == NULL )
         return fun_err = fun_err_null;
-
-    printf("n = %i\n",fun->n);
 
     if (fun->n < 101) {
     /* Solve the eigenvalue problem. */
@@ -215,10 +375,9 @@ int fun_roots_unit ( struct fun *fun ) {
         /* Remove small trailing coefficients */
         fun_rescale ( fun );
         N = fun->n-1;
-        if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale) {
-        while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
-            N--;
-            }
+        if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale)
+        	while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
+           		N--;
         cN = -0.5 / fun->coeffs.real[N];
             
         /* Initialize the vector A.
@@ -228,70 +387,70 @@ int fun_roots_unit ( struct fun *fun ) {
            shifted and aligned to 16-byte boundaries. */
         if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
             return fun_err = fun_err_malloc;
-            
         /* Shift A so that it is 16-byte aligned. */
         A = (double *)( (((size_t)A) + 15 ) & ~15 );
-    
-        /* Zero out A */
+		/* Zero out A */
         bzero( A , sizeof(double) * ( N * N ) );
-    
-        printf("Matlab version of A (lower hess)\n");
-        /* Assign the coefficients to the first column */
-        for (j = 0 ; j < N ; j++)
-            A[N-j-1] = cN * fun->coeffs.real[j];
-        A[2] += 0.5;
-    
-        /* Assign the super- and sub-diagonal */
-        for (j = N ; j < N*(N-1) ; j += N+1) {
-            A[j] = 0.5;
-            A[j+2] = 0.5;
-            }
-        A[N*N-2] = 0.5;
-        
-        /* Print the matrix (for testing only) */
-        for (k = 0 ; k < N ; k++) {
-            for (j = 0 ; j < N ; j++) {
-                printf("%e   ", A[j*N + k]);
-                }
-            printf("\n");
-            }
 
-        /* Make the transpose */
-
-        bzero( A , sizeof(double) * ( N * N ) );
-    
-        printf("Upper hess verison of A\n");
-        /* Assign the coefficients to the first column */
+        /* Also initialize and shift the output and work vectors */
+        if ( ( rr = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL || 
+			 ( ri = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL ||
+		     ( work = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL )
+            return fun_err = fun_err_malloc;
+        rr = (double *)( (((size_t)rr) + 15 ) & ~15 );
+        ri = (double *)( (((size_t)ri) + 15 ) & ~15 );
+        work = (double *)( (((size_t)work) + 15 ) & ~15 );
+   
+        /* Assign the coefficients to the first row */
         for (j = 0 ; j < N ; j++)
             A[N*(N-1-j)] = cN * fun->coeffs.real[j];
-        A[N*(N-1)] += 0.5;
+        A[N] += 0.5;
     
+        /* Assign the super- and sub-diagonal */
         A[1] = 0.5;
         A[N+2] = 0.5;
-        /* Assign the super- and sub-diagonal */
         for (j = 2*N+1 ; j < N*(N-1) ; j += N+1) {
             A[j] = 0.5;
             A[j+2] = 0.5;
             }
+		A[N*(N-1)-1] = 1.0;
         A[N*N-2] = 0.5;
 
-        printf("\n\n");
-        
-        /* Print the matrix (for testing only) */
-        for (k = 0 ; k < N ; k++) {
-            for (j = 0 ; j < N ; j++) {
-                printf("%e   ", A[j*N + k]);
-                }
-            printf("\n");
-            }
-        } 
+        /* Call to LAPACK to solve eigenvalue problem. */
+		ilo = 1; ihi = N; ldh = N; ldz = 1; lwork = N;
+		dhseqr_( &job, &compz, &N , &ilo, &ihi, A, &ldh, rr, ri, &z, &ldz, work, &lwork, &ok);
+		if ( ok != 0 )
+			return fun_err = fun_err_lapack;
 
+		opts = &chebopts_default;
+// THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
+		tol = 100.0 * opts->eps;
+        
+        /* Count the number of valid roots. */
+        *nroots = 0;
+		for (j = 0 ; j < N ; j++) {
+			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
+                *nroots = *nroots + 1;
+	        	} 
+			}
+		/* Allocate the memory for output. */
+        if ( ( roots = (double *)malloc( sizeof(double) * ( *nroots ) ) ) == NULL )
+			return fun_err = fun_err_malloc;
+
+		/* Store the valid roots in this allocated memory. */
+        k = 0;
+		for (j = 0 ; j < N ; j++) {
+			if (fabs(ri[j]) <= tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
+                roots[k++] = rr[j];
+	        	} 
+			} 
+		}
     else {
     /* Recurse. */
 
         /* Assume unit interval */
         if (fun->points[0] != -1.0 || fun->points[fun->n-1] != 1.0) {
-            util_chebpts( fun->n , fun->points );
+            util_chebpts( fun->n , fun->points ); //Is it better to recompute or rescale the chebpts?
             fun->a = -1.0;
             fun->b = 1.0;
             }
@@ -306,18 +465,32 @@ int fun_roots_unit ( struct fun *fun ) {
         fun_restrict( &funR , c , 1.0 );
 
         /* Find roots recursively */
-        fun_roots_unit( &funL );
-        fun_roots_unit( &funR ); 
+        rootsR = fun_roots_unit( &funR ,  &nrootsR ); 
+        rootsL = fun_roots_unit( &funL ,  &nrootsL );
+        *nroots = nrootsL + nrootsR;
 
-//        out = [-1+(rootsunit(g1,rootspref)+1)*.5*(1+c)   c+(rootsunit(g2,rootspref)+1)*.5*(1-c)];        
+		/* Allocate the memory for output. */
+        if ( ( roots = (double *)malloc( sizeof(double) * ( *nroots ) ) ) == NULL )
+			return fun_err = fun_err_malloc;
+		
+		/* Roll into output vector */
+        k = 0;
+        cR = 0.5 * (1.0 - c);
+        for (j = 0 ; j < nrootsR ; j++)
+            roots[k++] = c + ( rootsR[j] + 1.0 ) * cR;
+        cL = 0.5 * (1.0 + c); 
+        for (j = 0 ; j < nrootsL ; j++)
+            roots[k++] = -1.0 + ( rootsL[j] + 1.0 ) * cL;
 
         /* Clean up */
+        free(rootsL);
+        free(rootsR);
         fun_clean( &funL );
-        fun_clean( &funR );
+        fun_clean( &funR ); 
     }
         
     /* To the pub!. */
-    return fun_err_ok;
+    return roots;
     
     }
 

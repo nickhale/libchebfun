@@ -29,60 +29,38 @@
 #include "util.h"
 #include "fun.h"
 
-
-/**
- * @brief A simple scalar function.
- */
- 
-double myfun ( double x , void *data ) {
-
-    return sin( x + 0.1 );
-
-    }
-
-
-/**
- * @brief A simple scalar function with a parameter.
- */
- 
-double myfun_param ( double x , void *data ) {
-
-    double omega = *((double *)data);
-
-    return sin( omega * M_PI * x );
-
-    }
-
-
-/**
- * @brief A simple vectorized function.
- */
- 
-int myfun_vec ( const double *x , unsigned int N , double *out , void *data ) {
-    
-    int k;
-
-    for ( k = 0 ; k < N ; k++ )
-        out[k] = sin( x[k] + 0.1 );
-
-    return 0;
-
-    }
-
 /**
  * @brief A simple (long) vectorized function.
  */
  
-int myfun_vec_long ( const double *x , unsigned int N , double *out , void *data ) {
+int myfun_vec1 ( const double *x , unsigned int N , double *out , void *data ) {
     
     int k;
 
     for ( k = 0 ; k < N ; k++ )
-        out[k] = exp( 3.0 * x[k] ) * sin( 100 * M_PI * x[k] + 0.1 );
+        out[k] = sin( 5.0 * M_PI * x[k] ) * tanh( 10.0 * (x[k] - 0.5) * (x[k] + 0.5) ) + x[k];
 
     return 0;
 
     }
+
+
+/**
+ * @brief A simple (short) vectorized function.
+ */
+ 
+int myfun_vec2 ( const double *x , unsigned int N , double *out , void *data ) {
+    
+    int k;
+
+    for ( k = 0 ; k < N ; k++ )
+        out[k] = cos( M_PI * x[k] );
+
+    return 0;
+
+    }
+
+
 
 
 /**
@@ -102,99 +80,67 @@ int myfun_vec_prime ( const double *x , unsigned int N , double *out , void *dat
 
 
 /**
- * @brief A simple vectorized function with a parameter.
- */
- 
-int myfun_vec_param ( const double *x , unsigned int N , double *out , void *data ) {
-    
-    int k;
-    double omega = *((double *)data);
-
-    for ( k = 0 ; k < N ; k++ )
-        out[k] = sin( omega * M_PI * x[k] );
-
-    return 0;
-
-    }
-
-
-/**
- * @brief Create a simple #fun.
+ * @brief Do some tests.
  */
  
 int main ( int argc , char *argv[] ) {
 
-    struct fun f1 = FUN_EMPTY, f4 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY, f5 = FUN_EMPTY;
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, f4 = FUN_EMPTY, f5 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY;
     struct chebopts opts;
-    int k, res;
+    int k, res, nroots;
+    double *roots, y, x;
     
     /* Get a copy of the default options. */
     memcpy( &opts , &chebopts_default , sizeof(struct chebopts) );
     /* opts.flags |= chebopts_flag_resampling; */
+
+    /* Initialize the LONG fun f1 (vector real). */
+    fun_create_vec( &f1 , &myfun_vec1 , -1.0 , 1.0 , &opts , NULL );
     
-    
-    /* Initialize the fun f1 (vector real). */
-    if ( ( res = fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , &opts , NULL ) ) < 0 )
-        printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n",
-            fun_err, fun_err_msg[-fun_err]);
+	/* Test roots. */
+	roots = fun_roots ( &f1 , &nroots ); 
+    for ( k = 0 ; k < nroots ; k++ )
+        printf("r[%i] = %e\n", k, roots[k]);
+	free( roots );
+
+	/* Test max. */
+	fun_max( &f1 , &y, &x );
+    printf("max(f) = %e at x = %e\n", y, x);
+	fun_min( &f1 , &y, &x );
+    printf("min(f1) = %e at x = %e\n", y, x);
+	printf("norm(f1,inf) = %e\n", fun_norm_inf( &f1 ));
 
     /* Test 2 norm */
     printf("||f1||_2 = %e\n", fun_norm2( &f1 ));
 
-    /* Test differentiation */
-    printf("\n\nDiff:\n");
-    fun_init( &fp , f1.n-1 );
-    printf("fun_test: funp.n=%u\n",fp.n);
-    fun_diff( &f1, &fp );
-    for ( k = 0 ; k < fp.n ; k++ )
-        printf("funp_test: fun.points[%i]=%e \tfun.vals[%i]=%e \tfun.coeffs[%i]=%e\n",
-            k, fp.points[k], k, fp.vals.real[k], k, fp.coeffs.real[k]);
-    fun_create_vec( &fp2 , &myfun_vec_prime , -1.0 , 1.0 , &opts , NULL );
-    fun_scale ( &fp2 , -1.0 , &fp2);
-    fun_add ( &fp , &fp2 , &fp2 );
-    printf("||fp-fp2||_2 = %e\n", fun_norm2( &fp2 ));
-    fun_clean( &fp );
-    fun_clean( &fp2 );
+	/* Clean f1 */
+	fun_clean( &f1 );
 
-    /* Test construction from vals */
-    printf("\n\nVals construct:\n");
-    fun_create_vals( &f4 , f1.vals.real , -1.0 , 1.0 , f1.n );
-//    fun_display( &f4 );
-    fun_scale ( &f4 , -1.0 , &f4);
-    fun_add ( &f1 , &f4 , &f4 );
-    printf("||f-f4||_2 = %e\n", fun_norm2( &f4 ));
-    fun_clean( &f4 );
+    /* Initialize the SHORT fun f1 (vector real). */
+    if ( ( res = fun_create_vec( &f2 , &myfun_vec2 , -1.0 , 1.0 , &opts , NULL ) ) < 0 )
+        printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 
-    /* Test construction from coeffs */
-    printf("\n\nCoeff construct:\n");
-    fun_create_coeffs( &f4 , f1.coeffs.real , -1.0 , 1.0 , f1.n );
-//    fun_display( &f4 );
-    fun_scale ( &f4 , -1.0 , &f4);
-    fun_add ( &f1 , &f4 , &f4 );
-    printf("||f-f4||_2 = %e\n", fun_norm2( &f4 ));
-    fun_clean( &f4 );
+	/* Test Madd */
+    fun_init( &f3 , f2.n );
+    fun_madd ( &f2 , 1.0 , &f2 , -1.0 , &f3 );
+    printf("\n\nCopy error = %e \n", fun_norm_inf(&f3));
+    fun_clean( &f3 ); 
 
+	/* Test Copy */
+    _fun_alloc( &f5 , f2.n );
+    fun_copy( &f2 , &f5 );
+    fun_madd ( &f2 , 1.0 , &f5 , -1.0 , &f5 );
+    printf("\n\nCopy error = %e \n", fun_norm_inf(&f5));
+    fun_clean( &f5 ); 
+
+	/* Test restrict */
     printf("\n\nRestrict:\n");
-    fun_display( &f1 );
-    fun_restrict( &f1 , 0.0 , 1.0 );
-    fun_display( &f1 );
+    fun_display( &f2 );
+    fun_restrict( &f2 , 0.0 , 1.0 );
+    fun_display( &f2 );
 
-    printf("\n\nCopy:\n");
-    _fun_alloc( &f5 , f1.n );
-    fun_display( &f1 ); 
-    fun_display( &f5 );
-    fun_copy( &f1 , &f5 );
-    fun_display( &f1 );
-    fun_display( &f5 );
-    fun_clean( &f5 );
-
-    printf("\n\Roots:\n");
-    /*fun_clean( &f1 );
-    fun_create_vec( &f1 , &myfun_vec_long , -1.0 , 1.0 , &opts , NULL );*/
-    fun_roots_unit ( &f1 );  
-  
     /* Clean-up the fun. */
-    if ( fun_clean( &f1 ) < 0 )
+    if ( fun_clean( &f2 ) < 0 )
         printf("fun_test: FUN_EMPTY failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);   
             
