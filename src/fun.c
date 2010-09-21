@@ -45,7 +45,7 @@ const char *fun_err_msg[] = {
     "The fun has not been initialized.",
     "The funs do not span the same domain or operation requested outside of domain.",
     "Requested operation is not yet implemented." 
-    "A call to LAPACK ended badly." };
+    "A call to LAPACK ended in a calamity." };
     
     
 /* Constant struct for virgin funs. */
@@ -57,20 +57,36 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  *
  * @param fun The #fun to take the norm of.
  *
- * @return the inifnity norm of the fun.
+ * @return The inifnity norm of the fun or @c NAN if something went wrong
+ *      (see #fun_err).
  */
 
 double fun_norm_inf ( struct fun *fun ) {
 	
 	double miny, minx, maxy, maxx, norm;
+    
+    /* Bad apples? */
+    if ( fun == NULL ) {
+        fun_err = fun_err_null;
+        return NAN;
+        }
+    if ( !( fun->flags & fun_flag_init ) ) {
+        fun_err = fun_err_uninit;
+        return NAN;
+        }
 
-	fun_minandmax( fun , &miny , &minx , &maxy , &maxx );
+    /* Call min/max on this fun. */
+	if ( fun_minandmax( fun , &miny , &minx , &maxy , &maxx ) < 0 )
+        return NAN;
+        
+    /* Get the larger of the two. */
 	norm = -1.0*miny;
 	if ( norm < maxy )
 		norm = maxy;
 
     /* Well that was easy... */
     return norm;
+    
 	}
 
 
@@ -132,22 +148,32 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
     struct fun fp = FUN_EMPTY;
 	double *roots, *vals, valR;
 	int j;
-	unsigned int nroots;
+	int nroots;
+    
+    /* Check for the usual bovine excrement. */
+    if ( fun == NULL || miny == NULL || minx == NULL || maxx == NULL || maxy == NULL )
+        return fun_err = fun_err_null;
+    if ( !( fun->flags & fun_flag_init ) )
+        return fun_err = fun_err_uninit;
 
 	/* Compute the derivative */
-	fun_init( &fp , fun->n-1 );
 	fun_diff( fun , &fp );
 
-	/* Roots fo the derivative */
-	roots = fun_roots( &fp , &nroots );
+	/* Roots for the derivative */
+    if ( ( roots = (double *)alloca( sizeof(double) * fun->n ) ) == NULL )
+        return fun_err = fun_err_malloc;
+	if ( ( nroots = fun_roots( &fp , roots ) ) < 0 )
+        return fun_err;
 
 	/* Evaluate the function at these roots */
-	if ( ( vals = (double *)alloca( sizeof(double) * (nroots) + 16 ) ) == NULL )
+	if ( ( vals = (double *)alloca( sizeof(double) * nroots + 16 ) ) == NULL )
         return fun_err = fun_err_malloc;
     vals = (double *)( (((size_t)vals) + 15 ) & ~15 );
-	fun_eval_clenshaw_vec ( fun , roots , nroots , vals );
+	if ( fun_eval_clenshaw_vec ( fun , roots , nroots , vals ) < 0 )
+        return fun_err;
 	
 	/* Find the maximum */
+    /* TODO: call fun_eval_clenshaw_vec... */
 	*miny = fun_eval_clenshaw( fun , fun->a ); 
 	*minx = fun->a;
 	for ( j = 0 ; j < nroots ; j++ ) {
@@ -178,11 +204,11 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
 		}
 
 	/* Be free! */
-	free( roots );
 	fun_clean( &fp );
 	
     /* End on a good note. */
     return fun_err_ok;
+    
 	}
 
 
@@ -210,10 +236,10 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
             return fun_err;
             
     /* Copy the data */
+    fun2->flags = fun->flags;
+    fun2->n = fun->n;
     fun2->a = fun->a;
     fun2->b = fun->b;
-    fun2->scale = fun->scale;
-    fun2->flags = fun->flags;
 
     /* Copy the values. */
     memcpy( fun2->points , fun->points , sizeof(double) * fun->n );
@@ -326,23 +352,37 @@ int fun_simplify ( struct fun *fun , double tol ) {
  * @brief Compute the roots of a fun.
  *
  * @param fun The #fun to find roots of.
- * @param nroots The number of roots.
+ * @param roots A pointer to an array of double of length at least
+ *      equal to the length of @c fun - 1. This is where the roots will be stored.
  *
- * @return a vector containing the roots.
+ * @return The number of roots found or < 0 if an error occured.
  */
  
-double* fun_roots( struct fun *fun , unsigned int *nroots ) {
+int fun_roots( struct fun *fun , double *roots ) {
 	
-	int k;
-	double *roots, scl = 0.5 * (fun->b - fun->a);
-		
+	int k, nroots;
+	double scl;
+    
+    /* Check for the usual suspects. */
+    if ( fun == NULL || roots == NULL )
+        return fun_err = fun_err_null;
+    if ( !( fun->flags & fun_flag_init ) )
+        return fun_err = fun_err_uninit;
+        
+    /* Get scl once we're sure fun isn't bogus. */
+    scl = 0.5 * (fun->b - fun->a);
 
-	roots = fun_roots_unit( fun , nroots );
+    /* Call fun_roots_unit. */
+	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
+        return fun_err;
+        
+    /* Scale the roots to the correct interval if needed. */
 	if ( fun->a != -1.0 || fun->b != 1.0 )
-	for ( k = 0 ; k < *nroots ; k++ )
-		roots[k] = ( roots[k] - 1.0 )*scl + fun->a;
+	    for ( k = 0 ; k < nroots ; k++ )
+		    roots[k] = ( roots[k] - 1.0 )*scl + fun->a;
 
-	return roots;
+	return nroots;
+    
 	}
 
 
@@ -350,15 +390,16 @@ double* fun_roots( struct fun *fun , unsigned int *nroots ) {
  * @brief Compute the roots of a fun assuming it is on the unit interval.
  *
  * @param fun The #fun to find roots of.
- * @param nroots The number of roots.
+ * @param roots A pointer to an array of double of length at least
+ *      equal to the length of @c fun - 1. This is where the roots will be stored.
  *
- * @return a vector containing the roots.
+ * @return The number of roots found or < 0 if an error occured.
  */
  
-double* fun_roots_unit ( struct fun *fun , unsigned int *nroots ) {
+int fun_roots_unit ( struct fun *fun , double *roots ) {
 
-    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, *roots, *rootsL, *rootsR, tol;
-    unsigned int N, nrootsL, nrootsR;
+    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol;
+    unsigned int N, nrootsL, nrootsR, nroots = 0;
     int j, k;
 	char job = 'E', compz = 'N';
 	int ilo, ihi, ldh, ldz, lwork, ok;
@@ -427,17 +468,13 @@ double* fun_roots_unit ( struct fun *fun , unsigned int *nroots ) {
 		tol = 100.0 * opts->eps;
         
         /* Count the number of valid roots. */
-        *nroots = 0;
 		for (j = 0 ; j < N ; j++) {
 			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
-                *nroots = *nroots + 1;
+                nroots = nroots + 1;
 	        	} 
 			}
-		/* Allocate the memory for output. */
-        if ( ( roots = (double *)malloc( sizeof(double) * ( *nroots ) ) ) == NULL )
-			return fun_err = fun_err_malloc;
 
-		/* Store the valid roots in this allocated memory. */
+		/* Store the valid roots in the supplied memory. */
         k = 0;
 		for (j = 0 ; j < N ; j++) {
 			if (fabs(ri[j]) <= tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
@@ -465,32 +502,26 @@ double* fun_roots_unit ( struct fun *fun , unsigned int *nroots ) {
         fun_restrict( &funR , c , 1.0 );
 
         /* Find roots recursively */
-        rootsR = fun_roots_unit( &funR ,  &nrootsR ); 
-        rootsL = fun_roots_unit( &funL ,  &nrootsL );
-        *nroots = nrootsL + nrootsR;
+        nrootsR = fun_roots_unit( &funR ,  roots ); 
+        nrootsL = fun_roots_unit( &funL ,  &( roots[ nrootsR ] ) );
+        nroots = nrootsL + nrootsR;
 
-		/* Allocate the memory for output. */
-        if ( ( roots = (double *)malloc( sizeof(double) * ( *nroots ) ) ) == NULL )
-			return fun_err = fun_err_malloc;
-		
-		/* Roll into output vector */
+		/* Adjust roots in output vector */
         k = 0;
         cR = 0.5 * (1.0 - c);
-        for (j = 0 ; j < nrootsR ; j++)
-            roots[k++] = c + ( rootsR[j] + 1.0 ) * cR;
+        for (j = 0 ; j < nrootsR ; j++, k++ )
+            roots[k] = c + ( roots[j] + 1.0 ) * cR;
         cL = 0.5 * (1.0 + c); 
-        for (j = 0 ; j < nrootsL ; j++)
-            roots[k++] = -1.0 + ( rootsL[j] + 1.0 ) * cL;
+        for (j = 0 ; j < nrootsL ; j++, k++ )
+            roots[k] = -1.0 + ( roots[k] + 1.0 ) * cL;
 
-        /* Clean up */
-        free(rootsL);
-        free(rootsR);
         fun_clean( &funL );
         fun_clean( &funR ); 
+        
     }
         
     /* To the pub!. */
-    return roots;
+    return nroots;
     
     }
 
@@ -831,10 +862,11 @@ int fun_diff ( struct fun *f, struct fun *fp ) {
     if ( !( f->flags & fun_flag_init ) ) {
         return fun_err = fun_err_uninit;
         }
-/*    if ( f->n != fp->n+1 ) {
-        return <error in fun sizes>
-        } 
-*/
+
+    /* If fp is uninit or too small, init fp. */
+    if ( !( fp->flags & fun_flag_init ) || fp->n < f->n - 1 )
+        if ( fun_init( fp , f->n - 1 ) < 0 )
+            return fun_err;
 
     /* Assign the end points */
     fp->a = f->a;
@@ -1544,7 +1576,7 @@ int fun_clean ( struct fun *fun ) {
         }
         
     /* Re-set some values. */
-    fun->flags = 0;
+    fun->flags = fun_flag_none;
     fun->n = 0;
     fun->scale = 1.0;
     fun->points = NULL;

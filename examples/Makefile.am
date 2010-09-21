@@ -18,7 +18,7 @@
 # Automake stuff
 AUTOMAKE_OPTIONS=gnu
 
-# Add the source directory to CPPFLAGS
+# Add the source directory and debug to CFLAGS
 AM_CFLAGS = -g -I../src
 
 # Set-up the library

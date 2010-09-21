@@ -29,6 +29,7 @@
 
 
 /* Flags. */
+#define fun_flag_none                   0
 #define fun_flag_init                   1
 #define fun_flag_cplx                   2
 
@@ -113,8 +114,8 @@ int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun );
 int fun_simplify ( struct fun *fun, double tol );
 int fun_restrict ( struct fun *fun , double A , double B );
-double* fun_roots( struct fun *fun , unsigned int *nroots  );
-double* fun_roots_unit ( struct fun *fun , unsigned int *numroots );
+int fun_roots( struct fun *fun , double *roots  );
+int fun_roots_unit ( struct fun *fun , double *roots );
 int fun_copy ( struct fun *fun , struct fun *fun2 );
 int fun_max ( struct fun *fun , double *maxy , double *maxx );
 int fun_min ( struct fun *fun , double *miny , double *minx );

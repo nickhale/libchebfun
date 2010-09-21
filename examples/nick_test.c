@@ -88,7 +88,7 @@ int main ( int argc , char *argv[] ) {
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, f4 = FUN_EMPTY, f5 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY;
     struct chebopts opts;
     int k, res, nroots;
-    double *roots, y, x;
+    double *roots, y, x, norm;
     
     /* Get a copy of the default options. */
     memcpy( &opts , &chebopts_default , sizeof(struct chebopts) );
@@ -98,9 +98,11 @@ int main ( int argc , char *argv[] ) {
     fun_create_vec( &f1 , &myfun_vec1 , -1.0 , 1.0 , &opts , NULL );
     
 	/* Test roots. */
-	roots = fun_roots ( &f1 , &nroots ); 
+    roots = (double *)malloc( sizeof(double) * f1.n );
+	nroots = fun_roots ( &f1 , roots ); 
+    printf("nick_test: got %i real roots (f1.n=%i).\n",nroots,f1.n);
     for ( k = 0 ; k < nroots ; k++ )
-        printf("r[%i] = %e\n", k, roots[k]);
+        printf("r[%i] = %e, f(r[%i]) = %e\n", k, roots[k], k, fun_eval(&f1,roots[k]));
 	free( roots );
 
 	/* Test max. */
@@ -108,10 +110,10 @@ int main ( int argc , char *argv[] ) {
     printf("max(f) = %e at x = %e\n", y, x);
 	fun_min( &f1 , &y, &x );
     printf("min(f1) = %e at x = %e\n", y, x);
-	printf("norm(f1,inf) = %e\n", fun_norm_inf( &f1 ));
+	printf("fun_norm_inf(f1) = %e\n", fun_norm_inf( &f1 )); fflush(stdout);
 
     /* Test 2 norm */
-    printf("||f1||_2 = %e\n", fun_norm2( &f1 ));
+    printf("fun_norm2(f1) = %e\n", fun_norm2( &f1 )); fflush(stdout);
 
 	/* Clean f1 */
 	fun_clean( &f1 );
@@ -121,16 +123,20 @@ int main ( int argc , char *argv[] ) {
         printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 
 	/* Test Madd */
-    fun_init( &f3 , f2.n );
-    fun_madd ( &f2 , 1.0 , &f2 , -1.0 , &f3 );
-    printf("\n\nCopy error = %e \n", fun_norm_inf(&f3));
+    if ( fun_madd ( &f2 , 1.0 , &f2 , -1.0 , &f3 ) < 0 )
+        printf("nick_test: fun_madd bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+    if ( isnan( norm = fun_norm_inf(&f3) ) )
+        printf("nick_test: fun_norm_inf bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+    printf("\n\nCopy error = %e\n", norm); fflush(stdout);
     fun_clean( &f3 ); 
 
 	/* Test Copy */
-    _fun_alloc( &f5 , f2.n );
     fun_copy( &f2 , &f5 );
-    fun_madd ( &f2 , 1.0 , &f5 , -1.0 , &f5 );
-    printf("\n\nCopy error = %e \n", fun_norm_inf(&f5));
+    if ( fun_madd ( &f2 , 1.0 , &f5 , -1.0 , &f5 ) < 0 )
+        printf("nick_test: fun_madd bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+    if ( isnan( norm = fun_norm_inf(&f5) ) )
+        printf("nick_test: fun_norm_inf bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+    printf("\n\nCopy error = %e\n", norm); fflush(stdout);
     fun_clean( &f5 ); 
 
 	/* Test restrict */
