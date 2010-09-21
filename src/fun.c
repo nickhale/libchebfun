@@ -460,7 +460,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Call to LAPACK to solve eigenvalue problem. */
 		ilo = 1; ihi = N; ldh = N; ldz = 1; lwork = N;
 		dhseqr_( &job, &compz, &N , &ilo, &ihi, A, &ldh, rr, ri, &z, &ldz, work, &lwork, &ok);
-		if ( ok != 0 )
+		if ( ok < 0 )
 			return fun_err = fun_err_lapack;
 
 		opts = &chebopts_default;
@@ -468,7 +468,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		tol = 100.0 * opts->eps;
         
         /* Count the number of valid roots. */
-		for (j = 0 ; j < N ; j++) {
+		for (j = ok ; j < N ; j++) {
 			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
                 nroots = nroots + 1;
 	        	} 
