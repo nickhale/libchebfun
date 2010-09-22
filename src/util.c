@@ -25,6 +25,7 @@
 #include <fftw3.h>
 
 /* Local includes. */
+#include "errs.h"
 #include "chebopts.h"
 #include "util.h"
 
@@ -38,6 +39,9 @@ const char *util_err_msg[] = {
     "An unexpected NULL-pointer was encountered.",
     "A call to malloc failed, probably due to insufficient memory." };
 
+/* Define a macro to store the errors. */
+#define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FILE__ ) )
+    
 
 /**
  * @brief Checks if a given interpolation is converged or not and
@@ -69,7 +73,7 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     
     /* The usual checks and balances. */
     if ( x == NULL || v == NULL || coeffs == NULL )
-        return util_err = util_err_null;
+        return error(util_err_null);
         
     /* Get the default options if none were specified. */
     if ( opts == NULL )
@@ -149,7 +153,7 @@ int util_chebpolyval ( double *coeffs , unsigned int N , double *v ) {
     
     /* Check sanity of inputs. */
     if ( coeffs == NULL || v == NULL )
-        return util_err = util_err_null;
+        return error(util_err_null);
         
     /* Mind the edges... */
     coeffs[0] *= 2.0;
@@ -197,13 +201,13 @@ double *util_chebpolyval_alloc ( double *coeffs , unsigned int N ) {
 
     /* Check the inputs. */
     if ( coeffs == NULL ) {
-        util_err = util_err_null;
+        error(util_err_null);
         return NULL;
         }
         
     /* Allocate the return value array. */
     if ( posix_memalign( (void **)&(v) , 16 , sizeof(double) * N ) != 0 ) {
-        util_err = util_err_malloc;
+        error(util_err_malloc);
         return NULL;
         }
         
@@ -240,7 +244,7 @@ int util_chebpts ( unsigned int N , double *x ) {
 
     /* Check inputs. */
     if ( x == NULL )
-        return util_err = util_err_null;
+        return error(util_err_null);
         
     /* Fill the values (fist half) */
     for ( i = 0 ; i < (N+1)/2 ; i++ )
@@ -278,7 +282,7 @@ double * util_chebpts_alloc ( unsigned int N ) {
     
     /* Allocate the array. */
     if ( ( x = (double *)malloc( sizeof(double) * N ) ) == NULL ) {
-        util_err = util_err_malloc;
+        error(util_err_malloc);
         return NULL;
         }
         
@@ -325,7 +329,7 @@ int util_chebpoly ( double *v , unsigned int N , double *c ) {
     
     /* Check the inputs. */
     if ( v == NULL || c == NULL )
-        return util_err = util_err_null;
+        return error(util_err_null);
         
     /* Note, as of here, that fftw's routines do not produce error codes! */
     /* Create a plan for the DCT. */
@@ -380,13 +384,13 @@ double * util_chebpoly_alloc ( double *v , unsigned int N ) {
     
     /* Check the inputs. */
     if ( v == NULL ) {
-        util_err = util_err_null;
+        error(util_err_null);
         return NULL;
         }
         
     /* Allocate the return value array. */
     if ( posix_memalign( (void **)&(c) , 16 , sizeof(double) * N ) != 0 ) {
-        util_err = util_err_malloc;
+        error(util_err_malloc);
         return NULL;
         }
         
