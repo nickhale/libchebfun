@@ -1319,7 +1319,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
 double fun_eval_clenshaw ( struct fun *fun , double x ) {
 
     int k;
-    double yn = 0.0, ynp1 = 0.0, ynp2;
+    double yn = 0.0, ynp1 = 0.0, ynp2, m, ih;
 
     /* Check for nonsense. */
     if ( fun == NULL ) {
@@ -1336,6 +1336,11 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
         return 0.0;
     else if ( fun->n == 1 )
         return fun->coeffs.real[0];
+        
+    /* Map x to the interval [-1,1]. */
+    m = ( fun->a + fun->b ) * 0.5;
+    ih = 2.0 / ( fun->b - fun->a );
+    x = ( x - m ) * ih;
         
     /* Evaluate the recurrence. */
     for ( k = fun->n-1 ; k >= 0 ; k-- ) {
@@ -1368,7 +1373,7 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
 int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
 
     int j, k;
-    double yn, ynp1 = 0.0, ynp2;
+    double yn, ynp1 = 0.0, ynp2, xj, mi, ih;
 
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
@@ -1387,20 +1392,27 @@ int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , doubl
         return fun_err_ok;
         }
         
+    /* Get the centre and width of the interval. */
+    mi = ( fun->a + fun->b ) * 0.5;
+    ih = 2.0 / ( fun->b - fun->a );
+        
     /* Loop over the input values. */
     for ( j = 0 ; j < m ; j++ ) {
         
+        /* Map x[j] back to the [-1,1] interval. */
+        xj = ( x[j] - mi ) * ih;
+    
         /* Init the recurrence. */
         ynp1 = 0.0; yn = 0.0;
 
         /* Evaluate the recurrence. */
         for ( k = fun->n-1 ; k >= 0 ; k-- ) {
             ynp2 = ynp1; ynp1 = yn;
-            yn = fun->coeffs.real[k] + 2 * x[j] * ynp1 - ynp2;
+            yn = fun->coeffs.real[k] + 2 * xj * ynp1 - ynp2;
             }
 
         /* store the result. */
-        out[j] = yn - x[j] * ynp1;
+        out[j] = yn - xj * ynp1;
         
         }
         
@@ -1425,7 +1437,7 @@ int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , doubl
 double fun_eval ( struct fun *fun , double x ) {
 
     int k;
-    double w, u = 0.0, v = 0.0;
+    double w, u = 0.0, v = 0.0, m, ih;
     
     /* Check for nonsense. */
     if ( fun == NULL ) {
@@ -1442,6 +1454,11 @@ double fun_eval ( struct fun *fun , double x ) {
         return 0.0;
     else if ( fun->n == 1 )
         return fun->vals.real[0];
+        
+    /* Map x to the interval [-1,1]. */
+    m = ( fun->a + fun->b ) * 0.5;
+    ih = 2.0 / ( fun->b - fun->a );
+    x = ( x - m ) * ih;
         
     /* Do the barycentric form in place. */
     /* Do the first node separately due to the half-weight. */
@@ -1491,7 +1508,7 @@ double fun_eval ( struct fun *fun , double x ) {
 int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
 
     int j, k;
-    double w, u, v;
+    double w, u, v, xj, mi, ih;
     
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
@@ -1510,19 +1527,26 @@ int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) 
         return fun_err_ok;
         }
         
+    /* Get the centre and width of the interval. */
+    mi = ( fun->a + fun->b ) * 0.5;
+    ih = 2.0 / ( fun->b - fun->a );
+        
     /* For each element of x... */
     for ( j = 0 ; j < m ; j++ ) {
     
         /* Init u and w. */
         u = 0.0; w = 0.0;
+        
+        /* Map x[j] back to the [-1,1] interval. */
+        xj = ( x[j] - mi ) * ih;
     
         /* Do the barycentric form in place. */
         /* Do the first node separately due to the half-weight. */
-        if ( x[j] == fun->points[0] ) {
+        if ( xj == fun->points[0] ) {
             out[j] = fun->vals.real[0];
             continue;
             }
-        w = 0.5 / ( x[0] - fun->points[0] );
+        w = 0.5 / ( xj - fun->points[0] );
         u = fun->vals.real[0] * w;
         v = w;
         
@@ -1530,7 +1554,7 @@ int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) 
         for ( k = 1 ; k < fun->n-1 ; k++ ) {
             if ( x[j] == fun->points[k] )
                 break;
-            w = (double)( 1 - 2 * ( k & 1 ) ) / ( x[j] - fun->points[k] );
+            w = (double)( 1 - 2 * ( k & 1 ) ) / ( xj - fun->points[k] );
             u += fun->vals.real[k] * w;
             v += w;
             }
@@ -1539,11 +1563,11 @@ int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) 
         if ( k == fun->n-1 ) {
         
             /* Get the last node/weight. */
-            if ( x[j] == fun->points[k] ) {
+            if ( xj == fun->points[k] ) {
                 out[j] = fun->vals.real[k];
                 continue;
                 }
-            w = ( 0.5 - ( k & 1 ) ) / ( x[j] - fun->points[k] );
+            w = ( 0.5 - ( k & 1 ) ) / ( xj - fun->points[k] );
             u += fun->vals.real[k] * w;
             v += w;
             
