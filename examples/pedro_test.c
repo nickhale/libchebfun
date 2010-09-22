@@ -25,6 +25,7 @@
 #include <string.h>
 
 /* Local includes. */
+#include "errs.h"
 #include "chebopts.h"
 #include "util.h"
 #include "fun.h"
@@ -105,19 +106,25 @@ int main ( int argc , char *argv[] ) {
     
     
     /* Initialize the fun f1 (vector real). */
-    if ( ( res = fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , &opts , NULL ) ) < 0 )
+    if ( ( res = fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , &opts , NULL ) ) < 0 ) {
         printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
+        errs_dump(stdout);
+        }
             
     /* Initialize the fun f2 (vector reall, param). */
-    if ( ( res = fun_create_vec( &f2 , &myfun_vec_param , -1.0 , 1.0 , &opts , &omega ) ) < 0 )
+    if ( ( res = fun_create_vec( &f2 , &myfun_vec_param , -1.0 , 1.0 , &opts , &omega ) ) < 0 ) {
         printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
+        errs_dump(stdout);
+        }
             
     /* Create f3 = 0.5*f1 + f2. */
-    if ( ( res = fun_madd( &f1 , 0.5 , &f2 , 1.0 , &f2 ) ) < 0 )
+    if ( ( res = fun_madd( &f1 , 0.5 , &f2 , 1.0 , &f2 ) ) < 0 ) {
         printf("fun_test: fun_madd failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
+        errs_dump(stdout);
+        }
     /* if ( ( res = fun_mul( &f1 , &f2 , &f3 ) ) < 0 )
         printf("fun_test: fun_mul failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]); */
@@ -130,7 +137,7 @@ int main ( int argc , char *argv[] ) {
         }
     
     /* Show what we got. */
-    printf("fun_test: f1.n=%u, f1.coeffs.real[0]=%e\n",f1.n,f1.coeffs.real[0]);
+    printf("fun_test: f1.n=%u\n",f1.n);
     printf("fun_test: f2.n=%u\n",f2.n);
     printf("fun_test: f3.n=%u\n",f3.n);
     printf("fun_test: int of f3 is %e\n",fun_integrate(&f3));
@@ -141,12 +148,11 @@ int main ( int argc , char *argv[] ) {
         fun_eval_clenshaw( &f3 , (2.0 * k)/499 - 1 ) );
             
     /* Clean-up the funs. */
-    if ( fun_clean( &f1 ) < 0 )
+    if ( fun_clean( &f1 ) < 0 ||  fun_clean( &f2 ) < 0 ) {
         printf("fun_test: fun_clean failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
-    if ( fun_clean( &f2 ) < 0 )
-        printf("fun_test: fun_clean failed with fun_err=%i (%s).\n",
-            fun_err, fun_err_msg[-fun_err]);
+        errs_dump(stdout);
+        }
             
     /* Close the output file. */
     fclose(out);
