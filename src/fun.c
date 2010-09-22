@@ -467,20 +467,11 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
 		tol = 100.0 * opts->eps;
         
-        /* Count the number of valid roots. */
-		for (j = ok ; j < N ; j++) {
-			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
-                nroots = nroots + 1;
-	        	} 
-			}
-
-		/* Store the valid roots in the supplied memory. */
-        k = 0;
-		for (j = 0 ; j < N ; j++) {
-			if (fabs(ri[j]) <= tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
-                roots[k++] = rr[j];
-	        	} 
-			} 
+        /* Count the number of valid roots and store them. */
+		for (j = ok ; j < N ; j++)
+			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol)
+                roots[nroots++] = rr[j];
+                
 		}
     else {
     /* Recurse. */
