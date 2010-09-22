@@ -118,16 +118,16 @@ int main ( int argc , char *argv[] ) {
 	/* Clean f1 */
 	fun_clean( &f1 );
 
-    /* Initialize the SHORT fun f1 (vector real). */
+    /* Initialize the SHORT fun f2 (vector real). */
     if ( ( res = fun_create_vec( &f2 , &myfun_vec2 , -1.0 , 1.0 , &opts , NULL ) ) < 0 )
-        printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+        printf("nick_test: fun_create_vec failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 
 	/* Test Madd */
     if ( fun_madd ( &f2 , 1.0 , &f2 , -1.0 , &f3 ) < 0 )
         printf("nick_test: fun_madd bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
     if ( isnan( norm = fun_norm_inf(&f3) ) )
         printf("nick_test: fun_norm_inf bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
-    printf("\n\nCopy error = %e\n", norm); fflush(stdout);
+    printf("This should be zero: %e\n", norm); fflush(stdout);
     fun_clean( &f3 ); 
 
 	/* Test Copy */
@@ -136,20 +136,22 @@ int main ( int argc , char *argv[] ) {
         printf("nick_test: fun_madd bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
     if ( isnan( norm = fun_norm_inf(&f5) ) )
         printf("nick_test: fun_norm_inf bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
-    printf("\n\nCopy error = %e\n", norm); fflush(stdout);
+    printf("Copy error = %e\n", norm); fflush(stdout);
     fun_clean( &f5 ); 
 
 	/* Test restrict */
-    printf("\n\nRestrict:\n");
-    fun_display( &f2 );
-    fun_restrict( &f2 , 0.0 , 1.0 );
-    fun_display( &f2 );
-
-    /* Clean-up the fun. */
-    if ( fun_clean( &f2 ) < 0 )
-        printf("fun_test: FUN_EMPTY failed with fun_err=%i (%s).\n",
-            fun_err, fun_err_msg[-fun_err]);   
-            
+    if ( fun_restrict( &f2 , 0.0 , 1.0 ) < 0 )
+		printf("nick_test: fun_restrict bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+    /* Test construction on domain [0 1]. */
+    if ( ( res = fun_create_vec( &f3 , &myfun_vec2 , 0.0 , 1.0 , &opts , NULL ) ) < 0 )
+        printf("nick_test: fun_create_vec [0 1] failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+	fun_display( &f2 );
+	fun_display( &f3 );
+	fun_madd ( &f2 , 1.0 , &f3 , -1.0 , &f3 );
+	printf("\nRestrict error = %e\n", fun_norm_inf( &f3 )); fflush(stdout);
+    fun_clean( &f2 );
+	fun_clean( &f3 );
+	
     /* All is well. */
     return 0;
 

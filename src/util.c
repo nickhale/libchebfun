@@ -223,6 +223,42 @@ double *util_chebpolyval_alloc ( double *coeffs , unsigned int N ) {
     
 
 /**
+ * @brief Fills an array with @a N Chebyshev points on [A,B].
+ *
+ * @param N Number of Chebyshev points to create.
+ * @param x Pointer to an array of double values of length at least @a N.
+ * @param A Left endpoint.
+ * @param B Right endpoint.
+ * @return #util_err_ok or < 0 on error.
+ *
+ * This function is just a wrapper for util_chebpts.
+ *
+ * @sa util_chebpts_alloc, util_chebpts
+ */
+ 
+int util_chebptsAB ( unsigned int N , double *x , double A, double B ) {
+
+    int j;
+	double A05 = 0.5*A, B05 = 0.5*B;
+
+    /* Check inputs. */
+    if ( x == NULL )
+        return error(util_err_null);
+        
+    /* Call util_chebpts on [-1 1] */
+	if ( util_chebpts( N , x ) < 0 )
+		return error(util_err_null);
+
+	/* Scale to [A B] */
+	for ( j = 0 ; j < N ; j++ )
+		x[j] = A05 * (1.0 + x[j]) + B05 * (1.0 - x[j]);
+        
+    /* If all went well... */
+    return util_err_ok;
+
+    }
+
+/**
  * @brief Fills an array with @a N Chebyshev points on [-1,1].
  *
  * @param N Number of Chebyshev points to create.

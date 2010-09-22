@@ -285,7 +285,9 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
     iba = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
-        fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) *iba;
+        fun->points[j] = A * (fun->points[j] - fun->a) * iba + B * (fun->b - fun->points[j]) * iba;
+	fun->a = A;
+	fun->b = B;
 
     /* Get the restricted values. */
     fun_eval_clenshaw_vec ( fun , fun->points , fun->n ,  fun->vals.real );
@@ -315,7 +317,9 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
 // AT THE MOMENT TOL IS IGNORED!
 int fun_simplify ( struct fun *fun , double tol ) {
     
+	int j;
     unsigned int N;
+	double A05, B05;
     /* struct fun tmpfun = FUN_EMPTY; */
 
     /* Check inputs. */
@@ -347,7 +351,14 @@ int fun_simplify ( struct fun *fun , double tol ) {
         /* Re-create the fun in the already-allocated memory. */
         util_chebpolyval( fun->coeffs.real , N , fun->vals.real );
         util_chebpts( N , fun->points );
-        
+//        util_chebptsAB( N , fun->points , fun->a , fun->b);
+        /* Scale the points to the correct interval if needed. */
+		if ( fun->a != -1.0 || fun->b != 1.0 ) {
+			A05 = 0.5*fun->a;
+			B05 = 0.5*fun->b;
+			for ( j = 0 ; j < N ; j++ )
+				fun->points[j] = A05 * (1.0 + fun->points[j]) + B05 * (1.0 - fun->points[j]);
+        	}
         }
 
     /* Sweet. */
