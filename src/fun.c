@@ -1273,7 +1273,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
                 C->points[k] = a->points[k];
                 
             /* Allocate memory for the new coeffs and merge from a and b. */
-            if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * C->n ) != 0 )
+            if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * a->n ) != 0 )
                 return error(fun_err_malloc);
             for ( k = 0 ; k < b->n ; k++ )
                 temp[k] = wa * a->coeffs.real[k] + wb * b->coeffs.real[k];
@@ -1288,8 +1288,9 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
             C->n = a->n;
     
             /* Extract the vals from the merged coeffs. */
-            if ( util_chebpolyval( C->coeffs.real , C->n , C->vals.real ) < 0 )
-                return fun_err_util;
+            free( C->vals.real );
+            if ( ( C->vals.real = util_chebpolyval_alloc( C->coeffs.real , C->n ) ) == NULL )
+                return error(fun_err_util);
                 
             }
     
