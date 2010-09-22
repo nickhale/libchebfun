@@ -23,7 +23,7 @@ AM_CFLAGS = -g
 
 # Build the libchebfun library
 lib_LTLIBRARIES = libchebfun.la
-libchebfun_la_SOURCES = chebopts.c fun.c util.c
+libchebfun_la_SOURCES = chebopts.c fun.c util.c errs.c
 
 # List required headers
 include_HEADERS = chebopts.h fun.h util.h

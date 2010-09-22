@@ -26,6 +26,7 @@
 #include <clapack.h>
 
 /* Local includes. */
+#include "errs.h"
 #include "chebopts.h"
 #include "util.h"
 #include "fun.h"
@@ -47,6 +48,9 @@ const char *fun_err_msg[] = {
     "Requested operation is not yet implemented." 
     "A call to LAPACK ended in a calamity." };
     
+/* Define a macro to store the errors. */
+#define error( id )     ( fun_err = errs_register( id , fun_err_msg[-id] , __LINE__ , __FILE__ ) )
+    
     
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
@@ -67,11 +71,11 @@ double fun_norm_inf ( struct fun *fun ) {
     
     /* Bad apples? */
     if ( fun == NULL ) {
-        fun_err = fun_err_null;
+        error(fun_err_null);
         return NAN;
         }
     if ( !( fun->flags & fun_flag_init ) ) {
-        fun_err = fun_err_uninit;
+        error(fun_err_uninit);
         return NAN;
         }
 
@@ -104,7 +108,9 @@ int fun_max ( struct fun *fun , double *maxy , double *maxx ) {
 	
 	double miny, minx;
 
-	fun_minandmax ( fun , &miny , &minx , maxy , maxx );
+    
+	if ( fun_minandmax ( fun , &miny , &minx , maxy , maxx ) < 0 )
+        return error(fun_err);
 	
     /* End on a good note. */
     return fun_err_ok;
@@ -124,7 +130,8 @@ int fun_min ( struct fun *fun , double *miny , double *minx ) {
 	
 	double maxy, maxx;
 
-	fun_minandmax ( fun , miny , minx , &maxy , &maxx );
+	if ( fun_minandmax ( fun , miny , minx , &maxy , &maxx ) < 0 )
+        return error(fun_err);
 	
     /* End on a good note. */
     return fun_err_ok;
@@ -152,25 +159,25 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
     
     /* Check for the usual bovine excrement. */
     if ( fun == NULL || miny == NULL || minx == NULL || maxx == NULL || maxy == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
 
 	/* Compute the derivative */
 	fun_diff( fun , &fp );
 
 	/* Roots for the derivative */
     if ( ( roots = (double *)alloca( sizeof(double) * fun->n ) ) == NULL )
-        return fun_err = fun_err_malloc;
+        return error(fun_err_malloc);
 	if ( ( nroots = fun_roots( &fp , roots ) ) < 0 )
-        return fun_err;
+        return error(fun_err);
 
 	/* Evaluate the function at these roots */
 	if ( ( vals = (double *)alloca( sizeof(double) * nroots + 16 ) ) == NULL )
-        return fun_err = fun_err_malloc;
+        return error(fun_err_malloc);
     vals = (double *)( (((size_t)vals) + 15 ) & ~15 );
 	if ( fun_eval_clenshaw_vec ( fun , roots , nroots , vals ) < 0 )
-        return fun_err;
+        return error(fun_err);
 	
 	/* Find the maximum */
     /* TODO: call fun_eval_clenshaw_vec... */
@@ -228,12 +235,12 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
 
     /* Check inputs. */
     if ( fun == NULL || fun2 == NULL)
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* If fun2 has not been initialized or is too small, re-init. */
     if ( !(fun2->flags & fun_flag_init) || fun2->n < fun->n )
         if ( fun_init( fun2 , fun->n ) < 0 )
-            return fun_err;
+            return error(fun_err);
             
     /* Copy the data */
     fun2->flags = fun->flags;
@@ -271,9 +278,9 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
     
     /* Check inputs. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( fun->a > A || fun->b < B )
-        return fun_err = fun_err_domain;
+        return error(fun_err_domain);
     
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
     iba = 1.0/(fun->b-fun->a);
@@ -314,10 +321,10 @@ int fun_simplify ( struct fun *fun , double tol ) {
     /* Check inputs. */
     if ( fun == NULL ) {
         printf("confused\n");
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         }
     if ( !( fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
 
     /* Call util_simplify */
     N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , NULL );      
@@ -365,16 +372,16 @@ int fun_roots( struct fun *fun , double *roots ) {
     
     /* Check for the usual suspects. */
     if ( fun == NULL || roots == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Get scl once we're sure fun isn't bogus. */
     scl = 0.5 * (fun->b - fun->a);
 
     /* Call fun_roots_unit. */
 	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
-        return fun_err;
+        return error(fun_err);
         
     /* Scale the roots to the correct interval if needed. */
 	if ( fun->a != -1.0 || fun->b != 1.0 )
@@ -408,7 +415,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     
     /* Check inputs. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
 
     if (fun->n < 101) {
     /* Solve the eigenvalue problem. */
@@ -427,7 +434,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
            Note that A is padded with 16 bytes so that it can be
            shifted and aligned to 16-byte boundaries. */
         if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
         /* Shift A so that it is 16-byte aligned. */
         A = (double *)( (((size_t)A) + 15 ) & ~15 );
 		/* Zero out A */
@@ -437,7 +444,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         if ( ( rr = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL || 
 			 ( ri = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL ||
 		     ( work = (double *)alloca( sizeof(double) * (N) + 16 ) ) == NULL )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
         rr = (double *)( (((size_t)rr) + 15 ) & ~15 );
         ri = (double *)( (((size_t)ri) + 15 ) & ~15 );
         work = (double *)( (((size_t)work) + 15 ) & ~15 );
@@ -461,7 +468,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		ilo = 1; ihi = N; ldh = N; ldz = 1; lwork = N;
 		dhseqr_( &job, &compz, &N , &ilo, &ihi, A, &ldh, rr, ri, &z, &ldz, work, &lwork, &ok);
 		if ( ok < 0 )
-			return fun_err = fun_err_lapack;
+			return error(fun_err_lapack);
 
 		opts = &chebopts_default;
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
@@ -532,9 +539,9 @@ double fun_norm2_backup ( struct fun *fun ) {
 
     /* Check for bad input. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !(fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Compute the function ^2. */
     fun_mul( fun , fun , &fun2 );
@@ -567,17 +574,17 @@ double fun_norm2 ( struct fun *fun ) {
 
     /* Check for bad input. */
     if ( fun == NULL ) {
-        fun_err = fun_err_null;
+        error(fun_err_null);
         return NAN;
         }
     if ( !(fun->flags & fun_flag_init ) ) {
-        fun_err = fun_err_uninit;
+        error(fun_err_uninit);
         return NAN;
         }
         
     /* Allocate c on the stack. */
     if ( ( c = (double *)alloca( sizeof(double) * ( 2 * fun->n - 1 ) ) ) == NULL ) {
-        fun_err = fun_err_malloc;
+        error(fun_err_malloc);
         return NAN;
         }
     bzero( c , sizeof(double) * ( 2 * fun->n - 1 ) );
@@ -620,9 +627,9 @@ int fun_display ( struct fun *fun ) {
 
     /* Check for bad input. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !(fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
 
     /* Loop over the entries */
     for ( k = 0 ; k < fun->n ; k++ )
@@ -651,9 +658,9 @@ int fun_rescale ( struct fun *fun ) {
 
     /* Check for bad input. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !(fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Compute the scale. */
     for ( k = 0 ; k < fun->n ; k++ )
@@ -704,11 +711,11 @@ int fun_init ( struct fun *fun , unsigned int N ) {
 
     /* Check for null and stuff. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* Clean the fun, just to be safe. */
     if ( fun_clean( fun ) < 0 )
-        return fun_err;
+        return error(fun_err);
         
     /* Allocate the data inside the fun to the correct size. */
     _fun_alloc( fun , N);
@@ -743,7 +750,7 @@ int _fun_alloc ( struct fun *fun , unsigned int N ) {
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
          posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
          ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
-        return fun_err = fun_err_malloc;
+        return error(fun_err_malloc);
     
     /* Write the data to the fun. */
     fun->n = N;
@@ -772,7 +779,7 @@ int fun_create_vals ( struct fun *fun , double *vals , double a , double b , uns
     
     /* Check for null and stuff. */
     if ( fun == NULL || vals == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* Initialise a fun of the correct size. */
     fun_init( fun, N );
@@ -784,7 +791,7 @@ int fun_create_vals ( struct fun *fun , double *vals , double a , double b , uns
     
     /* Compute the coeffs from the values. */
     if ( util_chebpoly( vals , N , fun->coeffs.real ) < 0 )
-        return fun_err = fun_err_util;
+        return error(fun_err_util);
         
     /* Update the scale */
     _fun_rescale( fun );
@@ -812,7 +819,7 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
     
     /* Check for null and stuff. */
     if ( fun == NULL || coeffs == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* Initialise a fun of the correct size. */
     fun_init( fun, N );
@@ -824,7 +831,7 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
     
     /* Compute the values from the coeffs. */
     if ( util_chebpolyval( coeffs , N , fun->vals.real ) < 0 )
-        return fun_err = fun_err_util;
+        return error(fun_err_util);
         
     /* Update the scale */
     _fun_rescale( fun );
@@ -848,16 +855,16 @@ int fun_diff ( struct fun *f, struct fun *fp ) {
 
     /* Check for null and stuff. */
     if ( f == NULL || fp == NULL ) {
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         }
     if ( !( f->flags & fun_flag_init ) ) {
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         }
 
     /* If fp is uninit or too small, init fp. */
     if ( !( fp->flags & fun_flag_init ) || fp->n < f->n - 1 )
         if ( fun_init( fp , f->n - 1 ) < 0 )
-            return fun_err;
+            return error(fun_err);
 
     /* Assign the end points */
     fp->a = f->a;
@@ -917,13 +924,13 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
 
     /* Check for the usual nonsense... */
     if ( A == NULL || B == NULL || C == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( A->flags & fun_flag_init ) || !( B->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Do both funs span the same domain? */
     if ( A->a != B->a || A->b != B->b )
-        return fun_err = fun_err_domain;
+        return error(fun_err_domain);
         
     /* Get the size of the new fun. */
     N = A->n + B->n - 1;
@@ -934,7 +941,7 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
         /* Clean-up C if needed. */
         if ( !( C->flags & fun_flag_init ) || C->n < N )
             if ( fun_init( C , N ) < 0 )
-                return fun_err;
+                return error(fun_err);
             
         /* Set some values. */
         C->a = A->a; C->b = A->b;
@@ -948,20 +955,20 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
             
         /* Allocate a buffer for the new coefficients. */
         if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * N ) != 0 )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
         bzero( temp , sizeof(double) * (A->n + B->n - 1) );
         
         /* Allocate the new values. */
         if ( C->vals.real != NULL )
             free( C->vals.real );
         if ( posix_memalign( (void **)&(C->vals.real) , 16 , sizeof(double) * N ) != 0 )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
             
         /* Create the new points. */
         if ( C->points != NULL )
             free( C->points );
         if ( ( C->points = util_chebpts_alloc( N ) ) == NULL )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
                 
         }
 
@@ -983,7 +990,7 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
     
     /* Compute the new values. */
     if ( util_chebpolyval( C->coeffs.real , C->n , C->vals.real ) < 0 )
-        return fun_err = fun_err_util;
+        return error(fun_err_util);
                                 
     /* Get the scale of the new fun. */
     _fun_rescale( C );
@@ -1008,11 +1015,11 @@ double fun_integrate ( struct fun *fun ) {
 
     /* Check for null and stuff. */
     if ( fun == NULL ) {
-        fun_err = fun_err_null;
+        error(fun_err_null);
         return NAN;
         }
     if ( !( fun->flags & fun_flag_init ) ) {
-        fun_err = fun_err_uninit;
+        error(fun_err_uninit);
         return NAN;
         }
 
@@ -1044,9 +1051,9 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
 
     /* Check for the usual problems... */
     if ( A == NULL || B == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( A->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Are A and B one and the same? */
     if ( A == B ) {
@@ -1067,7 +1074,7 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
     
         /* Start by cleaning out B */
         if ( fun_clean( B ) != fun_err_ok )
-            return fun_err;
+            return error(fun_err);
             
         /* Copy the values from A to B */
         B->flags = A->flags;
@@ -1079,7 +1086,7 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
         if ( posix_memalign( (void **)&(B->vals.real) , 16 , sizeof(double) * B->n ) != 0 ||
              posix_memalign( (void **)&(B->coeffs.real) , 16 , sizeof(double) * B->n ) != 0 ||
              ( B->points = (double *)malloc( sizeof(double) * B->n ) ) == NULL )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
             
         /* Copy the scaled values from A. */
         for ( k = 0 ; k < B->n ; k++ ) {
@@ -1144,13 +1151,13 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
 
     /* Check for the usual problems... */
     if ( A == NULL || B == NULL || C == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( A->flags & fun_flag_init ) || !( B->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Do both funs span the same domain? */
     if ( A->a != B->a || A->b != B->b )
-        return fun_err = fun_err_domain;
+        return error(fun_err_domain);
         
     /* Re-name a and b such that |a| >= |b|. */
     if ( A->n >= B->n ) {
@@ -1166,7 +1173,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
         /* Init C if needed */
         if ( !( C->flags & fun_flag_init ) || C->n < a->n )
             if ( fun_init( C , a->n ) < 0 )
-                return fun_err;
+                return error(fun_err);
             
         /* Set the domain. */
         C->a = a->a; C->b = a->b;
@@ -1250,13 +1257,13 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
             /* Free the old points, re-allocate them and copy them from a. */
             free( C->points );
             if ( ( C->points = (double *)malloc( sizeof(double) * a->n ) ) == NULL )
-                return fun_err = fun_err_malloc;
+                return error(fun_err_malloc);
             for ( k = 0 ; k < a->n ; k++ )
                 C->points[k] = a->points[k];
                 
             /* Allocate memory for the new coeffs and merge from a and b. */
             if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * C->n ) != 0 )
-                return fun_err = fun_err_malloc;
+                return error(fun_err_malloc);
             for ( k = 0 ; k < b->n ; k++ )
                 temp[k] = wa * a->coeffs.real[k] + wb * b->coeffs.real[k];
             for ( k = k ; k < a->n ; k++ )
@@ -1305,11 +1312,11 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
 
     /* Check for nonsense. */
     if ( fun == NULL ) {
-        fun_err = fun_err_null;
+        error(fun_err_null);
         return NAN;
         }
     if ( !( fun->flags & fun_flag_init ) ) {
-        fun_err = fun_err_uninit;
+        error(fun_err_uninit);
         return NAN;
         }
         
@@ -1354,9 +1361,9 @@ int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , doubl
 
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Check for the simplest cases. */
     if ( fun->n < 2 ) {
@@ -1411,11 +1418,11 @@ double fun_eval ( struct fun *fun , double x ) {
     
     /* Check for nonsense. */
     if ( fun == NULL ) {
-        fun_err = fun_err_null;
+        error(fun_err_null);
         return NAN;
         }
     if ( !( fun->flags & fun_flag_init ) ) {
-        fun_err = fun_err_uninit;
+        error(fun_err_uninit);
         return NAN;
         }
         
@@ -1477,9 +1484,9 @@ int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) 
     
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
     if ( !( fun->flags & fun_flag_init ) )
-        return fun_err = fun_err_uninit;
+        return error(fun_err_uninit);
         
     /* Check for the simplest cases. */
     if ( fun->n < 2 ) {
@@ -1557,7 +1564,7 @@ int fun_clean ( struct fun *fun ) {
 
     /* Check for null. */
     if ( fun == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* Check if this fun was initialized at all. */
     if ( fun->flags & fun_flag_init ) {
@@ -1633,13 +1640,13 @@ int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a 
 
     /* Check inputs. */
     if ( fun == NULL || fx == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* declare a wrapper function for fun_create_vec. */
     int fx_wrapper ( const double *x , unsigned int N , double *out , void *data ) {
         int i;
         if ( x == NULL || fx == NULL )
-            return fun_err = fun_err_null;
+            return error(fun_err_null);
         for ( i = 0 ; i < N ; i++ )
             out[i] = (*fx)( x[i] , data );
         return fun_err_ok;
@@ -1706,7 +1713,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     
     /* Check inputs. */
     if ( fun == NULL || fx == NULL )
-        return fun_err = fun_err_null;
+        return error(fun_err_null);
         
     /* If no options were specified (NULL), use the default options. */
     if ( opts == NULL )
@@ -1720,7 +1727,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     if ( ( x = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) ) ) == NULL ||
          ( v = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) + 16 ) ) == NULL ||
          ( coeffs = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) + 16 ) ) == NULL )
-        return fun_err = fun_err_malloc;
+        return error(fun_err_malloc);
         
     /* Shift v and coeffs such that they are 16-byte aligned. */
     v = (double *)( (((size_t)v) + 15 ) & ~15 );
@@ -1742,11 +1749,11 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
             
         /* Allocate the nodes. */
         if ( ( xi = (double *)malloc( sizeof(double) * nr_xi ) ) == NULL )
-            return fun_err = fun_err_malloc;
+            return error(fun_err_malloc);
             
         /* Fill the nodes. */
         if ( util_chebpts( nr_xi , xi ) < 0 )
-            return fun_err = fun_err_util;
+            return error(fun_err_util);
             
         }
         
@@ -1759,7 +1766,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
             /* Get the N chebpts. */
             if ( util_chebpts( N , x ) < 0 )
-                return fun_err = fun_err_util;
+                return error(fun_err_util);
                 
             /* Scale them to the correct interval. */
             for ( k = 0 ; k < N ; k++ )
@@ -1767,7 +1774,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
                 
             /* Evaluate fx at the N nodes. */
             if ( (*fx)( x , N , v , data ) < 0 )
-                return fun_err = fun_err_fx;
+                return error(fun_err_fx);
                 
             /* Update the scale. */
             for ( k = 0 ; k < N ; k++ )
@@ -1791,7 +1798,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
                     
                 /* Evaluate fx at the N nodes. */
                 if ( (*fx)( x , N , v , data ) < 0 )
-                    return fun_err = fun_err_fx;
+                    return error(fun_err_fx);
                     
                 /* Update the scale. */
                 for ( k = 0 ; k < N ; k++ )
@@ -1810,7 +1817,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
                 /* Evaluate fx at the (N-1)/2 new nodes and store
                     the result in the second half of x. */
                 if ( (*fx)( x , N / 2 , &(x[N/2]) , data ) < 0 )
-                    return fun_err = fun_err_fx;
+                    return error(fun_err_fx);
                     
                 /* Update the scale. */
                 for ( k = 0 ; k < N/2 ; k++ )
@@ -1834,7 +1841,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         /* Compute the coeffs from the values. */
         if ( util_chebpoly( v , N , coeffs ) < 0 )
-            return fun_err = fun_err_util;
+            return error(fun_err_util);
         
         
         /* Check convergence of the coefficients. */
@@ -1863,7 +1870,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
          posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
          ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
-        return fun_err = fun_err_malloc;
+        return error(fun_err_malloc);
     
     /* Write the data to the fun. */
     memcpy( fun->vals.real , v , sizeof(double) * N );
