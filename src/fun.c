@@ -1,6 +1,6 @@
 /*******************************************************************************
  * This file is part of libchebfun.
- * Coypright (c) 2010 The Chebfun Team.
+ * Copyright (c) 2010 The Chebfun Team.
  * 
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  *
  * @param fun The #fun to take the norm of.
  *
- * @return The inifnity norm of the fun or @c NAN if something went wrong
+ * @return The infinity norm of the fun or @c NAN if something went wrong
  *      (see #fun_err).
  */
 
@@ -258,22 +258,22 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
     
     }
 
-
 /**
  * @brief Restrict a fun to a subinterval of its domain
  *
  * @param fun The #fun which needs restricting.
  * @param A The new left endpoint.
  * @param B The new right endpoint.
+ * @param funout The restricted fun.
  *
  * @return #fun_err_ok or < 0 if an error occured.
  *
  * Note that both @c A and @c B must be within the domain of @c fun.
  */
 
-int fun_restrict ( struct fun *fun , double A , double B ) {
+int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) {
     
-    double iba;
+    double iba, *x, *out;
     int j;
     
     /* Check inputs. */
@@ -282,22 +282,57 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
     if ( fun->a > A || fun->b < B )
         return error(fun_err_domain);
     
+    /* Allocate some memory for the new evaluation points. */
+    if ( ( x = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
+        return error(fun_err_malloc);
+
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
     iba = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
-        fun->points[j] = A * (fun->points[j] - fun->a) * iba + B * (fun->b - fun->points[j]) * iba;
-	fun->a = A;
-	fun->b = B;
+        //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
+        x[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
+//IS THIS BETTER / QUICKER THAN CALLING util_chebpts ?
 
-    /* Get the restricted values. */
-    fun_eval_clenshaw_vec ( fun , fun->points , fun->n ,  fun->vals.real );
+    if (fun == funout) {
+        printf("fun == funout\n");
+        /* Allocate some storage for evaluations */
+        if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
+            return error(fun_err_malloc);
+    
+        /* Get the restricted values. */
+        //    fun_eval_clenshaw_vec ( fun , x , fun->n ,  fun->vals.real );
+        fun_eval_vec ( fun , x , fun->n ,  out );
+    
+        /* Assign to funout */    
+        for (j = 0 ; j < fun->n ; j++ ) {
+            fun->vals.real[j] = out[j];
+            }
+
+        }
+    else {
+        /* Start by cleaning out funout */
+        if ( fun_clean( funout ) != fun_err_ok )
+            return error(fun_err);
+        /* Allocate some space */
+        fun_init( funout , fun->n );
+        funout->flags = fun->flags;
+
+        /* Get the restricted values. */
+        //    fun_eval_clenshaw_vec ( fun , x , fun->n ,  fun->vals.real );
+        fun_eval_vec ( fun , x , fun->n ,  funout->vals.real );
+        }
+        
+	funout->a = A;
+	funout->b = B;
 
     /* Get the coefficients. */
-    util_chebpoly ( fun->vals.real  , fun->n , fun->coeffs.real );
+    util_chebpoly ( funout->vals.real  , funout->n , funout->coeffs.real );
 
     /* Simplify */
 // NEED TO PASS A SENSIBLE TOLERANCE
-    fun_simplify( fun , 0.0 ); 
+    fun_simplify( funout , 0.0 ); 
+    
+//    fun_rescale( funout );
         
     /* End on a good note. */
     return fun_err_ok;
@@ -317,9 +352,9 @@ int fun_restrict ( struct fun *fun , double A , double B ) {
 // AT THE MOMENT TOL IS IGNORED!
 int fun_simplify ( struct fun *fun , double tol ) {
     
-	int j;
+//	int j;
     unsigned int N;
-	double A05, B05;
+//	double A05, B05;
     /* struct fun tmpfun = FUN_EMPTY; */
 
     /* Check inputs. */
@@ -352,13 +387,14 @@ int fun_simplify ( struct fun *fun , double tol ) {
         util_chebpolyval( fun->coeffs.real , N , fun->vals.real );
         util_chebpts( N , fun->points );
 //        util_chebptsAB( N , fun->points , fun->a , fun->b);
-        /* Scale the points to the correct interval if needed. */
+        /* Scale the points to the correct interval if needed.
 		if ( fun->a != -1.0 || fun->b != 1.0 ) {
 			A05 = 0.5*fun->a;
 			B05 = 0.5*fun->b;
 			for ( j = 0 ; j < N ; j++ )
-				fun->points[j] = A05 * (1.0 + fun->points[j]) + B05 * (1.0 - fun->points[j]);
+				fun->points[j] = B05 * (1.0 + fun->points[j]) + A05 * (1.0 - fun->points[j]);
         	}
+        */
         }
 
     /* Sweet. */
@@ -501,14 +537,9 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
             fun->b = 1.0;
             }
 
-        /* Copy fun and restrict to subintervals (with magic ChebConstant c) */
-        _fun_alloc( &funL , fun->n );
-        _fun_alloc( &funR , fun->n );
-        fun_copy( fun , &funL );
-        fun_copy( fun , &funR );
-        
-        fun_restrict( &funL , -1.0, c );
-        fun_restrict( &funR , c , 1.0 );
+        /* Restrict to subintervals (with magic ChebConstant c) */
+        fun_restrict( fun , -1.0, c , &funL );
+        fun_restrict( fun , c , 1.0 , &funR );
 
         /* Find roots recursively */
         nrootsR = fun_roots_unit( &funR ,  roots ); 
@@ -635,17 +666,22 @@ double fun_norm2 ( struct fun *fun ) {
 int fun_display ( struct fun *fun ) {
 
     int k;
+    double xk, a05, b05;
 
     /* Check for bad input. */
     if ( fun == NULL )
         return error(fun_err_null);
     if ( !(fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
-
+    
+    a05 = 0.5*fun->a; 
+    b05 = 0.5*fun->b; 
     /* Loop over the entries */
-    for ( k = 0 ; k < fun->n ; k++ )
+    for ( k = 0 ; k < fun->n ; k++ ) {
+        xk = b05 * (fun->points[k] + 1.0) + a05 * (1.0 - fun->points[k]);
         printf("fun.points[%i]=%e \tfun.vals[%i]=%e \tfun.coeffs[%i]=%e\n",
-            k, fun->points[k], k, fun->vals.real[k], k, fun->coeffs.real[k]);
+            k, xk, k, fun->vals.real[k], k, fun->coeffs.real[k]);
+        }
     printf("\n");
     
     /* Huzzah! */

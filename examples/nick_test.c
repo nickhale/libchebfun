@@ -72,7 +72,7 @@ int myfun_vec_prime ( const double *x , unsigned int N , double *out , void *dat
     int k;
 
     for ( k = 0 ; k < N ; k++ )
-        out[k] = cos( x[k] + 0.1 );
+        out[k] = - M_PI * sin( M_PI * x[k] );
 
     return 0;
 
@@ -85,7 +85,7 @@ int myfun_vec_prime ( const double *x , unsigned int N , double *out , void *dat
  
 int main ( int argc , char *argv[] ) {
 
-    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, f4 = FUN_EMPTY, f5 = FUN_EMPTY, fp = FUN_EMPTY, fp2 = FUN_EMPTY;
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, f4 = FUN_EMPTY, f5 = FUN_EMPTY, f6 = FUN_EMPTY;
     struct chebopts opts;
     int k, res, nroots;
     double *roots, y, x, norm;
@@ -140,17 +140,18 @@ int main ( int argc , char *argv[] ) {
     fun_clean( &f5 ); 
 
 	/* Test restrict */
-    if ( fun_restrict( &f2 , 0.0 , 1.0 ) < 0 )
+    if ( fun_restrict( &f2 , 0.0 , 1.0 , &f6 ) < 0 )
 		printf("nick_test: fun_restrict bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
     /* Test construction on domain [0 1]. */
-    if ( ( res = fun_create_vec( &f3 , &myfun_vec2 , 0.0 , 1.0 , &opts , NULL ) ) < 0 )
+    if ( ( res = fun_create_vec( &f4 , &myfun_vec2 , 0.0 , 1.0 , &opts , NULL ) ) < 0 )
         printf("nick_test: fun_create_vec [0 1] failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
-	fun_display( &f2 );
-	fun_display( &f3 );
-	fun_madd ( &f2 , 1.0 , &f3 , -1.0 , &f3 );
-	printf("\nRestrict error = %e\n", fun_norm_inf( &f3 )); fflush(stdout);
+	fun_madd ( &f6 , 1.0 , &f4 , -1.0 , &f4 );
+	printf("\nRestrict error = %e\n", fun_norm_inf( &f4 )); fflush(stdout);
     fun_clean( &f2 );
-	fun_clean( &f3 );
+	fun_clean( &f4 );
+    fun_clean( &f6 );
+
+
 	
     /* All is well. */
     return 0;

@@ -113,7 +113,7 @@ double fun_norm2 ( struct fun *fun );
 int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun );
 int fun_simplify ( struct fun *fun, double tol );
-int fun_restrict ( struct fun *fun , double A , double B );
+int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout);
 int fun_roots( struct fun *fun , double *roots  );
 int fun_roots_unit ( struct fun *fun , double *roots );
 int fun_copy ( struct fun *fun , struct fun *fun2 );
