@@ -109,6 +109,7 @@ int _fun_alloc ( struct fun *fun , unsigned int N );
 int fun_create_vals( struct fun *fun , double *vals , double a , double b , unsigned int N );
 int fun_create_coeffs( struct fun *fun , double *coeffs , double a , double b , unsigned int N );
 int fun_rescale ( struct fun *fun );
+void _fun_rescale ( struct fun *fun );
 double fun_norm2 ( struct fun *fun );
 int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun );

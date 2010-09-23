@@ -281,7 +281,7 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_null);
     if ( fun->a > A || fun->b < B )
         return error(fun_err_domain);
-    
+        
     /* Allocate some memory for the new evaluation points. */
     if ( ( x = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
         return error(fun_err_malloc);
@@ -292,29 +292,32 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
         x[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
 //IS THIS BETTER / QUICKER THAN CALLING util_chebpts ?
+/* Pedro: yes! basic arithmetic operations are fast and can be easily pipelined and
+    thus trump transcendental functions on most systems. */
 
     if (fun == funout) {
         printf("fun == funout\n");
         /* Allocate some storage for evaluations */
         if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
             return error(fun_err_malloc);
+            
+        /* Pedro: If you use clenshaw below, you don't neet to alloc out! */
     
         /* Get the restricted values. */
         //    fun_eval_clenshaw_vec ( fun , x , fun->n ,  fun->vals.real );
         fun_eval_vec ( fun , x , fun->n ,  out );
     
-        /* Assign to funout */    
-        for (j = 0 ; j < fun->n ; j++ ) {
-            fun->vals.real[j] = out[j];
-            }
+        /* Assign to funout */
+        memcpy( funout->vals.real , out , sizeof(double) * fun->n );
 
         }
     else {
         /* Start by cleaning out funout */
-        if ( fun_clean( funout ) != fun_err_ok )
-            return error(fun_err);
-        /* Allocate some space */
-        fun_init( funout , fun->n );
+        if ( !( funout->flags & fun_flag_init ) || ( funout->n < fun->n ) )
+            if ( fun_init( funout , fun->n ) != fun_err_ok )
+                return error(fun_err);
+                
+        /* Pass some variables to the new fun */
         funout->flags = fun->flags;
 
         /* Get the restricted values. */
@@ -322,17 +325,18 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         fun_eval_vec ( fun , x , fun->n ,  funout->vals.real );
         }
         
+    /* Set the new limits. */
 	funout->a = A;
 	funout->b = B;
 
     /* Get the coefficients. */
     util_chebpoly ( funout->vals.real  , funout->n , funout->coeffs.real );
 
-    /* Simplify */
+    /* Simplify and re-scale. */
 // NEED TO PASS A SENSIBLE TOLERANCE
-    fun_simplify( funout , 0.0 ); 
-    
-//    fun_rescale( funout );
+    if ( fun_simplify( funout , 0.0 ) < 0 )
+        return error(fun_err);
+    _fun_rescale( funout );
         
     /* End on a good note. */
     return fun_err_ok;
@@ -772,7 +776,8 @@ int fun_init ( struct fun *fun , unsigned int N ) {
     bzero( fun->coeffs.real , sizeof(double) * N );
     
     /* Get the Chebyshev nodes. */
-    util_chebpts( N , fun->points );
+    if ( util_chebpts( N , fun->points ) < 0 )
+        return error(fun_err_util);
         
     /* Jolly good! */
     return fun_err_ok;
