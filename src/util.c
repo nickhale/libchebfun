@@ -234,6 +234,8 @@ double *util_chebpolyval_alloc ( double *coeffs , unsigned int N ) {
  * This function is just a wrapper for util_chebpts.
  *
  * @sa util_chebpts_alloc, util_chebpts
+ * TODO: don't call chebpts first, do it all in one loop, will be faster
+ *      since the whole thing can be pipelined.
  */
  
 int util_chebptsAB ( unsigned int N , double *x , double A, double B ) {
