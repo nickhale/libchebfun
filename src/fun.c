@@ -290,13 +290,9 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
     iba = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
         //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
-        x[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
-//IS THIS BETTER / QUICKER THAN CALLING util_chebpts ?
-/* Pedro: yes! basic arithmetic operations are fast and can be easily pipelined and
-    thus trump transcendental functions on most systems. */
+        x[j] = B * (fun->points[j] + 1.0) * iba + A * (1.0 - fun->points[j]) * iba;
 
     if (fun == funout) {
-        printf("fun == funout\n");
         /* Allocate some storage for evaluations */
         if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
             return error(fun_err_malloc);
@@ -362,10 +358,8 @@ int fun_simplify ( struct fun *fun , double tol ) {
     /* struct fun tmpfun = FUN_EMPTY; */
 
     /* Check inputs. */
-    if ( fun == NULL ) {
-        printf("confused\n");
+    if ( fun == NULL )
         return error(fun_err_null);
-        }
     if ( !( fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
 
@@ -433,11 +427,11 @@ int fun_roots( struct fun *fun , double *roots ) {
     /* Call fun_roots_unit. */
 	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
         return error(fun_err);
-        
+
     /* Scale the roots to the correct interval if needed. */
 	if ( fun->a != -1.0 || fun->b != 1.0 )
 	    for ( k = 0 ; k < nroots ; k++ )
-		    roots[k] = ( roots[k] - 1.0 )*scl + fun->a;
+		    roots[k] = ( 1.0 - roots[k] ) * scl + fun->a;
 
 	return nroots;
     
@@ -456,7 +450,7 @@ int fun_roots( struct fun *fun , double *roots ) {
  
 int fun_roots_unit ( struct fun *fun , double *roots ) {
 
-    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol;
+    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol, a, b;
     unsigned int N, nrootsL, nrootsR, nroots = 0;
     int j, k;
 	char job = 'E', compz = 'N';
@@ -536,7 +530,8 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 
         /* Assume unit interval */
         if (fun->points[0] != -1.0 || fun->points[fun->n-1] != 1.0) {
-            util_chebpts( fun->n , fun->points ); //Is it better to recompute or rescale the chebpts?
+			a = fun->a;
+			b = fun->b;
             fun->a = -1.0;
             fun->b = 1.0;
             }
@@ -544,6 +539,10 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Restrict to subintervals (with magic ChebConstant c) */
         fun_restrict( fun , -1.0, c , &funL );
         fun_restrict( fun , c , 1.0 , &funR );
+
+		/* Reset the interval */
+        fun->a = a;
+        fun->b = b;
 
         /* Find roots recursively */
         nrootsR = fun_roots_unit( &funR ,  roots ); 
@@ -683,7 +682,7 @@ int fun_display ( struct fun *fun ) {
     /* Loop over the entries */
     for ( k = 0 ; k < fun->n ; k++ ) {
         xk = b05 * (fun->points[k] + 1.0) + a05 * (1.0 - fun->points[k]);
-        printf("fun.points[%i]=%e \tfun.vals[%i]=%e \tfun.coeffs[%i]=%e\n",
+        printf("fun.points[%i]=%16.16e \tfun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
             k, xk, k, fun->vals.real[k], k, fun->coeffs.real[k]);
         }
     printf("\n");
@@ -1661,6 +1660,55 @@ int fun_clean ( struct fun *fun ) {
     /* All is well. */
     return fun_err_ok;
 
+    }
+
+/**
+ * @brief Constructs a @a fun from a real scalar-valued function.
+ *
+ * @param fun The #fun structure to be initialized.
+ * @param fx A pointer to the target function. @a fx takes two parameters,
+ *      a double @a x and an optional void pointer and returns the value
+ *      of the function at @a x.
+ * @param a
+ * @param b The left and right boundaries of the interval over which
+ *      @a f is to be approximated.
+ * @param N The desired length of the fun.
+ * @param data An pointer to additional data that will be passed
+ *      to @a fx at every call.
+ * @return #fun_err_ok or < 0 on error. 
+ */
+
+int fun_create_nonadapt ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , unsigned int N , void *data ) {
+    
+	int j;
+	double a05, b05;
+
+    /* Check inputs. */
+    if ( fun == NULL || fx == NULL )
+        return error(fun_err_null);
+
+	/* initialise the fun */
+	fun_init( fun , N );
+	fun->a = a;
+	fun->b = b;
+
+	a05 = 0.5*fun->a; 
+	b05 = 0.5*fun->b;
+
+	/* Evaluate the function */
+	for ( j = 0 ; j < N ; j++ )
+    	fun->vals.real[j] = (fx)( b05 * (fun->points[j] + 1.0) + a05 * (1.0 - fun->points[j]) , data );
+
+    /* Compute the coeffs from the values. */
+    if ( util_chebpoly( fun->vals.real , N , fun->coeffs.real ) < 0 )
+        return error(fun_err_util);
+       
+    /* Update the scale */
+    _fun_rescale( fun );
+        
+    /* All is well. */
+    return fun_err_ok;
+    
     }
 
 

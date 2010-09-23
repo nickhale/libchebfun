@@ -108,6 +108,7 @@ int fun_init( struct fun *fun , unsigned int N );
 int _fun_alloc ( struct fun *fun , unsigned int N );
 int fun_create_vals( struct fun *fun , double *vals , double a , double b , unsigned int N );
 int fun_create_coeffs( struct fun *fun , double *coeffs , double a , double b , unsigned int N );
+int fun_create_nonadapt ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , unsigned int N , void *data );
 int fun_rescale ( struct fun *fun );
 void _fun_rescale ( struct fun *fun );
 double fun_norm2 ( struct fun *fun );
