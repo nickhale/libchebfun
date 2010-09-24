@@ -152,6 +152,7 @@ int main ( int argc , char *argv[] ) {
 	/* Test restrict */
     if ( fun_restrict( &f2 , 0.0 , 1.0 , &f6 ) < 0 )
 		printf("nick_test: fun_restrict bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+
     /* Test construction on domain [0 1]. */
     if ( ( res = fun_create_vec( &f4 , &myfun_vec2 , 0.0 , 1.0 , &opts , NULL ) ) < 0 )
         printf("nick_test: fun_create_vec [0 1] failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
@@ -167,12 +168,18 @@ int main ( int argc , char *argv[] ) {
 	printf("\nNonadapt error (inf) = %e\n", fun_norm_inf( &f7 )); fflush(stdout);
 	printf("\nNonadapt error (2) = %e\n", fun_norm2( &f7 )); fflush(stdout);
 
+    fun_clean( &f7 );
+
+    /* Test prolong. */
+    if ( ( res = fun_create_nonadapt( &f7 , &myfun_2 , 0.0 , 1.0 , f6.n , NULL ) ) < 0 )
+        printf("nick_test: fun_create_nonadapt [0 1] failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
+	fun_madd ( &f7 , 1.0 , &f6 , -1.0 , &f7 );
+	printf("\nNonadapt error (inf) = %e\n", fun_norm_inf( &f7 )); fflush(stdout);
+	printf("\nNonadapt error (2) = %e\n", fun_norm2( &f7 )); fflush(stdout);
+
     fun_clean( &f2 );
 	fun_clean( &f4 );
     fun_clean( &f6 );
-    fun_clean( &f7 );
-
-
 	
     /* All is well. */
     return 0;

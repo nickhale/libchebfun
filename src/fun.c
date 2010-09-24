@@ -57,6 +57,96 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
 
 
 /**
+ * @brief prolong a fun to a different number of Chebyshev points.
+ *
+ * @param A The #fun to prolong.
+ * @param N The desired length.
+ * @param B The prolonged #fun. This can
+ *      be the same value as @c A.
+ *
+ * @return #fun_err_ok or < 0 if an error occured.
+ */
+
+int fun_prolong( struct fun *A , unsigned int N , struct fun *B) {
+	
+	int j, k, m;
+    double *x, a05, b05;
+
+    /* Bad apples? */
+    if ( A == NULL || B == NULL)
+        return error(fun_err_null);
+    if ( !( A->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+	m = N - A->n; // The difference in lengths 
+	/* Trivial case m == 0 */
+	if (m == 0) {
+		B = A;
+		return fun_err_ok;
+		}
+
+    if (B != A) {
+        /* Start by cleaning out B */
+        if ( fun_init( B , N ) != fun_err_ok )
+            return error(fun_err);
+            
+        /* Copy the values from A to B */
+        B->flags = A->flags;
+        B->a = A->a; B->b = A->b;
+        B->scale = A->scale;
+        
+        /* Trivial constant case */
+        if ( A->n == 1 ) {
+            B->coeffs.real[0] = A->coeffs.real[0];
+            for ( k = 1 ; k < N ; k++ )
+                B->vals.real[k] = A->vals.real[0];
+            return fun_err_ok;	
+            }
+        
+//      THE HEURISTIC FOR SIZES NEEDS RECHECKING IN C!
+
+        /* Barycentric case  */
+        if ( m<0 && N < 129 && A->n < 1000 ) {
+            if ( A->a != -1.0 || A->b != 1.0 ) {
+                /* Must allocate memory for shifted Chebyshev points */
+                if ( ( x = (double *)alloca( sizeof(double) * N ) ) == NULL )
+                    return error(fun_err_malloc);
+                a05 = 0.5*A->a, b05 = 0.5*A->b;
+                for ( k = 0 ; k < N ; k++ )
+                    x[k] = a05 * (1.0 + x[k]) + b05 * (1.0 - x[k]);
+                }
+            else {
+                fun_eval_vec( A , B->points , N , B->vals.real );
+                }
+            util_chebpoly ( B->vals.real , N , B->coeffs.real );
+            }
+        /* Use FFTs */
+        else {
+            /* Prolonging */
+            if ( m > 0 )
+                memcpy( B->coeffs.real , A->coeffs.real , sizeof(double) * A->n );
+            /* Restricting - need to consider aliasing */
+            else {
+                for ( k = 0 ; k < A->n ; k += 2*(N-2) )
+                    B->coeffs.real[0] += A->coeffs.real[k];
+                for ( j = 1 ; j < N-1 ; j++ ) {
+                    for ( k = j ; k < A->n ; k += 2*(N-2) )
+                        B->coeffs.real[j] += A->coeffs.real[k];
+                    for ( k = 2*(N-2)-j+2 ; k < A->n ; k += 2*(N-2) )
+                        B->coeffs.real[j] += A->coeffs.real[k];
+                    }
+                for ( k = N-1 ; k < A->n ; k += 2*(N-2) )
+                    B->coeffs.real[N-1] += A->coeffs.real[k];
+                }
+            util_chebpolyval ( B->coeffs.real , N , B->vals.real );
+            }
+        }
+
+    return fun_err_ok;
+
+    }           
+
+/**
  * @brief Compute the infinity norm of a fun on its domain.
  *
  * @param fun The #fun to take the norm of.
@@ -268,12 +358,13 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
  *
  * @return #fun_err_ok or < 0 if an error occured.
  *
- * Note that both @c A and @c B must be within the domain of @c fun.
+ * Note that both @c A and @c B must be within the domain of @c fun, 
+ * and that the output fun will NOT be 'simplified'. 
  */
 
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) {
     
-    double iba, *x, *out;
+    double iba, *x;
     int j;
     
     /* Check inputs. */
@@ -293,18 +384,18 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         x[j] = B * (fun->points[j] + 1.0) * iba + A * (1.0 - fun->points[j]) * iba;
 
     if (fun == funout) {
-        /* Allocate some storage for evaluations */
-        if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
-            return error(fun_err_malloc);
-            
-        /* Pedro: If you use clenshaw below, you don't neet to alloc out! */
-    
+
+//        /* Allocate some storage for evaluations */
+//        if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
+//            return error(fun_err_malloc);
+//        /* Get the restricted values. */
+//        fun_eval_vec ( fun , x , fun->n ,  out );
+//        /* Assign to vals */
+//        memcpy( fun->vals.real , out , sizeof(double) * fun->n );
+
+        /* (If you use clenshaw below, you don't need to alloc out!) */    
         /* Get the restricted values. */
-        //    fun_eval_clenshaw_vec ( fun , x , fun->n ,  fun->vals.real );
-        fun_eval_vec ( fun , x , fun->n ,  out );
-    
-        /* Assign to funout */
-        memcpy( funout->vals.real , out , sizeof(double) * fun->n );
+        fun_eval_clenshaw_vec ( fun , x , fun->n ,  funout->vals.real );
 
         }
     else {
@@ -317,8 +408,8 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         funout->flags = fun->flags;
 
         /* Get the restricted values. */
-        //    fun_eval_clenshaw_vec ( fun , x , fun->n ,  fun->vals.real );
-        fun_eval_vec ( fun , x , fun->n ,  funout->vals.real );
+//        fun_eval_vec ( fun , x , fun->n ,  funout->vals.real );
+        fun_eval_clenshaw_vec ( fun , x , fun->n ,  funout->vals.real );
         }
         
     /* Set the new limits. */
@@ -328,10 +419,12 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
     /* Get the coefficients. */
     util_chebpoly ( funout->vals.real  , funout->n , funout->coeffs.real );
 
-    /* Simplify and re-scale. */
+    /* Simplify */
 // NEED TO PASS A SENSIBLE TOLERANCE
-    if ( fun_simplify( funout , 0.0 ) < 0 )
-        return error(fun_err);
+//    if ( fun_simplify( funout , 1e-15 ) < 0 )
+//        return error(fun_err);
+
+    /* Re-scale. */
     _fun_rescale( funout );
         
     /* End on a good note. */
@@ -342,14 +435,14 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
 
 /**
  * @brief Simplify a fun (remove trailing coefficients below tolerance).
- *      We simply call util_simplify. 
  *
  * @param fun The fun the be simplified.
  * @param tol Tolerance
  * @return The new length of the fun or < 0 on error.
+ *
+ * This wraps _fun_simplify (internal) and adds points and values!
  */
 
-// AT THE MOMENT TOL IS IGNORED!
 int fun_simplify ( struct fun *fun , double tol ) {
     
 //	int j;
@@ -364,41 +457,51 @@ int fun_simplify ( struct fun *fun , double tol ) {
         return error(fun_err_uninit);
 
     /* Call util_simplify */
-    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , NULL );      
+    N = _fun_simplify ( fun , tol );      
 
-    /* Store in a new fun if simplify was successful. */
-    if ( N < fun->n ) {
-    
-/*        _fun_alloc( &tmpfun , N );
-//        util_chebpts( N, tmpfun.points );
-        memcpy( tmpfun.points , fun->points , sizeof(double) * N );
-        memcpy( tmpfun.vals.real , fun->vals.real , sizeof(double) * N );
-        memcpy( tmpfun.coeffs.real , fun->coeffs.real , sizeof(double) * N );
-        fun_clean( fun );
-        _fun_alloc( fun , N );
-        fun_copy ( &tmpfun , fun ); */
-        
-        /* Set the new size. */
-        fun->n = N;
+    /* Store newdata simplify was successful. */
+    if ( N < fun->n && N > 0) {
         
         /* Re-create the fun in the already-allocated memory. */
         util_chebpolyval( fun->coeffs.real , N , fun->vals.real );
         util_chebpts( N , fun->points );
-//        util_chebptsAB( N , fun->points , fun->a , fun->b);
-        /* Scale the points to the correct interval if needed.
-		if ( fun->a != -1.0 || fun->b != 1.0 ) {
-			A05 = 0.5*fun->a;
-			B05 = 0.5*fun->b;
-			for ( j = 0 ; j < N ; j++ )
-				fun->points[j] = B05 * (1.0 + fun->points[j]) + A05 * (1.0 - fun->points[j]);
-        	}
-        */
+
         }
 
     /* Sweet. */
     return N;
+
+    }
+
+    
+/**
+ * @brief Simplify a fun (remove trailing coefficients below tolerance).
+ *      Note that values or points are not assigned, only coefficients.
+ *
+ * @param fun The fun the be simplified.
+ * @param tol Tolerance
+ * @return The new length of the fun or < 0 on error.
+ *
+ * We simply call util_simplify.  Should be used internally only!
+ */
+
+// AT THE MOMENT TOL IS IGNORED!
+int _fun_simplify ( struct fun *fun , double tol ) {
+    
+    unsigned int N;
+
+    /* Call util_simplify */
+    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , NULL );
+
+    /* Set the new size. */
+    if ( N < fun->n && N > 0)
+        fun->n = N;  
+    
+    /* Sweet. */
+    return N;
     
     }
+
 
 /**
  * @brief Compute the roots of a fun.
@@ -538,8 +641,10 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 
         /* Restrict to subintervals (with magic ChebConstant c) */
         fun_restrict( fun , -1.0, c , &funL );
+        _fun_simplify( &funL , 1e-15 );
         fun_restrict( fun , c , 1.0 , &funR );
-
+        _fun_simplify( &funR , 1e-15 );
+    
 		/* Reset the interval */
         fun->a = a;
         fun->b = b;
