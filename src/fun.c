@@ -491,7 +491,7 @@ int _fun_simplify ( struct fun *fun , double tol ) {
     unsigned int N;
 
     /* Call util_simplify */
-    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , NULL );
+    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , chebopts_current->eps );
 
     /* Set the new size. */
     if ( N < fun->n && N > 0)
@@ -558,7 +558,6 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     int j, k;
 	char job = 'E', compz = 'N';
 	int ilo, ihi, ldh, ldz, lwork, ok;
-	const struct chebopts *opts;
     struct fun funL = FUN_EMPTY, funR = FUN_EMPTY;
     
     /* Check inputs. */
@@ -618,9 +617,8 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		if ( ok < 0 )
 			return error(fun_err_lapack);
 
-		opts = &chebopts_default;
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
-		tol = 100.0 * opts->eps;
+		tol = 100.0 * chebopts_current->eps;
         
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
@@ -1847,15 +1845,11 @@ double myfun ( double x , void *data ) {
  *      @code
  struct fun f;
  double omega = 4.0;
- fun_create( &f , &myfun , -1.0 , 1.0 , &chebopts_default , &omega );
+ fun_create( &f , &myfun , -1.0 , 1.0 , omega );
         @endcode
  * @param a
  * @param b The left and right boundaries of the interval over which
  *      @a f is to be approximated.
- * @param opts A pointer to a #chebopts structure containing the
- *      parameters that will be used to construct the fun. If
- *      this parameter is set to @a NULL, the default parameters
- *      #chebopts_default will be used.
  * @param data An pointer to additional data that will be passed
  *      to @a fx at every call.
  * @return #fun_err_ok or < 0 on error.
@@ -1866,7 +1860,7 @@ double myfun ( double x , void *data ) {
  * @sa fun_create_vec
  */
  
-int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , const struct chebopts *opts , void *data ) {
+int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , void *data ) {
 
     /* Check inputs. */
     if ( fun == NULL || fx == NULL )
@@ -1883,7 +1877,7 @@ int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a 
         }
         
     /* Call the vectorized version with the wrapper function. */
-    return fun_create_vec( fun , &fx_wrapper , a , b , opts , data );
+    return fun_create_vec( fun , &fx_wrapper , a , b , data );
 
     }
     
@@ -1921,10 +1915,6 @@ int myfun ( const double *x , unsigned int N , double *out , void *data ) {
  * @param a
  * @param b The left and right boundaries of the interval over which
  *      @a f is to be approximated.
- * @param opts A pointer to a #chebopts structure containing the
- *      parameters that will be used to construct the fun. If
- *      this parameter is set to @a NULL, the default parameters
- *      #chebopts_default will be used.
  * @param data An pointer to additional data that will be passed
  *      to @a fx at every call.
  * @return #fun_err_ok or < 0 on error.
@@ -1932,7 +1922,7 @@ int myfun ( const double *x , unsigned int N , double *out , void *data ) {
  * @sa fun_create
  */
  
-int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , const struct chebopts *opts , void *data ) {
+int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , void *data ) {
 
     double *x, *v, *coeffs, scale = 0.0;
     double m = (a + b) * 0.5, h= (b - a) * 0.5;
@@ -1945,18 +1935,14 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     if ( fun == NULL || fx == NULL )
         return error(fun_err_null);
         
-    /* If no options were specified (NULL), use the default options. */
-    if ( opts == NULL )
-        opts = &chebopts_default;
-        
     /* Initialize the vectors x, v and coeffs to the maximum length.
        Allocation is done on the stack, so we don't need to worry about
        releasing these if the routine fails anywhere underway.
        Note that v and coeffs are padded with 16 bytes so that they can be
        shifted and aligned to 16-byte boundaries. */
-    if ( ( x = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) ) ) == NULL ||
-         ( v = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) + 16 ) ) == NULL ||
-         ( coeffs = (double *)alloca( sizeof(double) * (opts->maxdegree + 1) + 16 ) ) == NULL )
+    if ( ( x = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) ) ) == NULL ||
+         ( v = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) + 16 ) ) == NULL ||
+         ( coeffs = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) + 16 ) ) == NULL )
         return error(fun_err_malloc);
         
     /* Shift v and coeffs such that they are 16-byte aligned. */
@@ -1964,18 +1950,18 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     coeffs = (double *)( (((size_t)coeffs) + 15 ) & ~15 );
     
     /* Init the length N. */
-    N = opts->minsamples;
+    N = chebopts_current->minsamples;
         
     /* Make sure the nodes have been pre-allocated. */
-    if ( !(opts->flags & chebopts_flag_resampling) &&
-         ( nr_xi < opts->maxdegree + 1 || (nr_xi - 1) % (N - 1) != 0 ) ) {
+    if ( !(chebopts_current->flags & chebopts_flag_resampling) &&
+         ( nr_xi < chebopts_current->maxdegree + 1 || (nr_xi - 1) % (N - 1) != 0 ) ) {
     
         /* Clean up old nodes. */
         if ( xi != NULL )
             free(xi);
             
         /* Set the nr of nodes. */
-        for ( nr_xi = opts->minsamples ; nr_xi < opts->maxdegree + 1 ; nr_xi = 2*nr_xi - 1 );
+        for ( nr_xi = chebopts_current->minsamples ; nr_xi < chebopts_current->maxdegree + 1 ; nr_xi = 2*nr_xi - 1 );
             
         /* Allocate the nodes. */
         if ( ( xi = (double *)malloc( sizeof(double) * nr_xi ) ) == NULL )
@@ -1992,7 +1978,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     while ( 1 ) {
     
         /* If we are re-sampling, get the nodes for arbitrary N. */
-        if ( opts->flags & chebopts_flag_resampling ) {
+        if ( chebopts_current->flags & chebopts_flag_resampling ) {
         
             /* Get the N chebpts. */
             if ( util_chebpts( N , x ) < 0 )
@@ -2020,7 +2006,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
             stride = (nr_xi - 1) / (N - 1);
         
             /* If this is the first go, just copy all the nodes. */
-            if ( N == opts->minsamples ) {
+            if ( N == chebopts_current->minsamples ) {
             
                 /* Pick the N nodes out of xi. */
                 for ( k = 0 ; k < N ; k++ )
@@ -2075,7 +2061,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         
         /* Check convergence of the coefficients. */
-        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , opts ) ) < 0 )
+        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_current->eps ) ) < 0 )
             return fun_err_util;
             
         /* TODO: Sampletest? */
@@ -2087,7 +2073,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
             }
             
         /* No convergence, adjust N. */
-        if ( ( opts->flags & chebopts_flag_resampling ) && 
+        if ( ( chebopts_current->flags & chebopts_flag_resampling ) && 
              ( N < 64 ) )
             N = (int)( ( N - 1 ) * M_SQRT2 + 1 ) | 1;
         else

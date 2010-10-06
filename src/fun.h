@@ -92,8 +92,8 @@ extern const struct fun FUN_EMPTY;
 
 
 /* Function declarations. */
-int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , const struct chebopts *opts , void *data );
-int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , const struct chebopts *opts , void *data );
+int fun_create ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , void *data );
+int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , void *data );
 int fun_clean ( struct fun *fun );
 double fun_eval ( struct fun *fun , double x );
 int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out );

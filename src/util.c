@@ -26,7 +26,6 @@
 
 /* Local includes. */
 #include "errs.h"
-#include "chebopts.h"
 #include "util.h"
 
 
@@ -66,7 +65,7 @@ const char *util_err_msg[] = {
  
 /* TODO: add sampletest here? */
  
-int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , double hscale , double vscale , const struct chebopts *opts ) {
+int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps ) {
 
     int k, tail;
     double temp, tail_max, diff_max;
@@ -75,10 +74,6 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     if ( x == NULL || v == NULL || coeffs == NULL )
         return error(util_err_null);
         
-    /* Get the default options if none were specified. */
-    if ( opts == NULL )
-        opts = &chebopts_default;
-    
     /* Get the expected tail length. */
     if ( N < 4 )
         tail = N;
@@ -105,8 +100,8 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     if ( tail_max > 1.0e12 )
         tail_max = 1.0e12;
     tail_max *= DBL_EPSILON;
-    if ( tail_max < opts->eps )
-        tail_max = opts->eps;
+    if ( tail_max < eps )
+        tail_max = eps;
         
     /* Get the index of the last coefficient |coeffs[k]| < tail_max. */
     for ( k = N-1 ; k >= 0 && fabs(coeffs[k]) < tail_max ; k-- );

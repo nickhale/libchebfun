@@ -96,16 +96,11 @@ int myfun_vec_prime ( const double *x , unsigned int N , double *out , void *dat
 int main ( int argc , char *argv[] ) {
 
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, f4 = FUN_EMPTY, f5 = FUN_EMPTY, f6 = FUN_EMPTY, f7 = FUN_EMPTY;
-    struct chebopts opts;
     int k, res, nroots;
     double *roots, y, x, norm;
     
-    /* Get a copy of the default options. */
-    memcpy( &opts , &chebopts_default , sizeof(struct chebopts) );
-    /* opts.flags |= chebopts_flag_resampling; */
-
     /* Initialize the LONG fun f1 (vector real). */
-    fun_create_vec( &f1 , &myfun_vec1 , -1.0 , 1.0 , &opts , NULL );
+    fun_create_vec( &f1 , &myfun_vec1 , -1.0 , 1.0 , NULL );
     
 	/* Test roots. */
     roots = (double *)malloc( sizeof(double) * f1.n );
@@ -129,7 +124,7 @@ int main ( int argc , char *argv[] ) {
 	fun_clean( &f1 );
 
     /* Initialize the SHORT fun f2 (vector real). */
-    if ( ( res = fun_create_vec( &f2 , &myfun_vec2 , -1.0 , 1.0 , &opts , NULL ) ) < 0 )
+    if ( ( res = fun_create_vec( &f2 , &myfun_vec2 , -1.0 , 1.0 , NULL ) ) < 0 )
         printf("nick_test: fun_create_vec failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 
 	/* Test Madd */
@@ -154,7 +149,7 @@ int main ( int argc , char *argv[] ) {
 		printf("nick_test: fun_restrict bombed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 
     /* Test construction on domain [0 1]. */
-    if ( ( res = fun_create_vec( &f4 , &myfun_vec2 , 0.0 , 1.0 , &opts , NULL ) ) < 0 )
+    if ( ( res = fun_create_vec( &f4 , &myfun_vec2 , 0.0 , 1.0 , NULL ) ) < 0 )
         printf("nick_test: fun_create_vec [0 1] failed with fun_err=%i (%s).\n", fun_err, fun_err_msg[-fun_err]);
 	fun_madd ( &f6 , 1.0 , &f4 , -1.0 , &f4 );
 

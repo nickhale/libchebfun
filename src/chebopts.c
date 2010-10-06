@@ -27,10 +27,19 @@
 /**
  * @brief Default #chebopts settings.
  * 
+ * Pointer to the default #chebopts struct to be used by libchebfun.
+ * Points to #chebopts_default but can be modified by the user.
+ */
+struct chebopts *chebopts_current = &chebopts_default;
+
+
+/**
+ * @brief Default #chebopts settings.
+ * 
  * This #chebopts struct is used as a default when no options are provided
  * by the user.
  */
-const struct chebopts chebopts_default = {
+struct chebopts chebopts_default = {
     0 ,             /* flags */
     9 ,             /* minsamples */
     65536 ,         /* maxdegree */

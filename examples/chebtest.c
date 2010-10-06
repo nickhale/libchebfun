@@ -26,6 +26,7 @@
 #include <string.h>
 
 /* Local includes. */
+#include "errs.h"
 #include "chebopts.h"
 #include "util.h"
 #include "fun.h"
@@ -111,7 +112,6 @@
  * max_and_imps.m
  * maxdegree.m
  * maxdoubleroots.m
- * max_min.m
  * maxtest.m
  * mfun_integrate.m
  * misclnttests1.m
@@ -164,6 +164,8 @@
 /**
  * @brief Re-implementation of the chebtest sumcos20x, impemented for #fun instead
  * of #chebfun.
+ * 
+ * MISSING: Test for complex!
  */
  
 int chebtest_sumcos20x ( char **name ) {
@@ -182,11 +184,64 @@ int chebtest_sumcos20x ( char **name ) {
     *name = "sumcos20x";
         
     /* Create the fun. */
-    if ( fun_create_vec( &f , &thefun , -1.0 , 1.0 , NULL , NULL ) < 0 )
+    if ( fun_create_vec( &f , &thefun , -1.0 , 1.0 , NULL ) < 0 )
         return -__LINE__;
         
     /* Do the first test. */
-    if ( fabs( fun_integrate(&f) - sin(20.0)/10.0 ) >= 1.5e-15 * chebopts_default.eps / DBL_EPSILON )
+    if ( fabs( fun_integrate(&f) - sin(20.0)/10.0 ) >= 1.5e-15 * chebopts_current->eps / DBL_EPSILON )
+        return -__LINE__;
+        
+    /* TODO: multiply f by 1i! */
+        
+    /* If nothing went wrong, just return 0. */
+    return 0;
+        
+    }
+    
+    
+/**
+ * @brief Re-implementation of the chebtest max_min, impemented for #fun instead
+ * of #chebfun.
+ *
+ * MISSING: Test with infinite right boundary.
+ */
+ 
+int chebtest_max_min ( char **name ) {
+
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
+    double minx_f1, miny_f1, maxx_f1, maxy_f1;
+    double minx_f2, miny_f2, maxx_f2, maxy_f2;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = cos( 2.0 * M_PI * (x[k] - M_PI) ) * exp( -x[k] );
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "max_min";
+        
+    /* Create the funs. */
+    if ( fun_create_vec( &f1 , &thefun , 0.0 , 1.0 , NULL ) < 0 )
+        return -__LINE__;
+    /* TODO: f2 should actually be in [0,inf]. */
+    if ( fun_create_vec( &f2 , &thefun , 0.0 , 20.0 , NULL ) < 0 )
+        return -__LINE__;
+        
+    /* Get the min and max values for f1 and f2. */
+    if ( fun_minandmax( &f1 , &miny_f1 , &minx_f1 , &maxy_f1 , &maxx_f1 ) < 0 )
+        return -__LINE__;
+    if ( fun_minandmax( &f2 , &miny_f2 , &minx_f2 , &maxy_f2 , &maxx_f2 ) < 0 )
+        return -__LINE__;
+        
+    /* Do the first test. */
+    if ( fabs(maxx_f1 - maxx_f2) + fabs(maxy_f1 - maxy_f2) >= chebopts_current->eps * 100 )
+        return -__LINE__;
+        
+    /* Do the second test. */
+    if ( fabs(minx_f1 - minx_f2) + fabs(miny_f1 - miny_f2) >= chebopts_current->eps * 100 )
         return -__LINE__;
         
     /* If nothing went wrong, just return 0. */
@@ -202,8 +257,8 @@ int chebtest_sumcos20x ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 1;
-    const int (*tests[1])( char ** ) = { &chebtest_sumcos20x };
+    const int ntests = 2;
+    int (*tests[2])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min };
     
     int k, res;
     char *name = NULL;
@@ -215,8 +270,10 @@ int main ( int argc , char *argv[] ) {
         res = (*tests[k])( &name );
         
         /* Be verbose about the result. */
-        if ( res < 0 )
+        if ( res < 0 ) {
             printf("chebtest: test %s failed on line %i of file %s.\n", name, -res, __FILE__ );
+            errs_dump(stdout);
+            }
         else
             printf("chebtest: test %s passed.\n", name);
     

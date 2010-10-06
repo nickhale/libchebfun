@@ -40,7 +40,8 @@
 
 
 /* Global, external variables. */
-extern const struct chebopts chebopts_default;
+extern struct chebopts *chebopts_current;
+extern struct chebopts chebopts_default;
 
 
 /**

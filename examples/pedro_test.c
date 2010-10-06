@@ -96,24 +96,19 @@ int main ( int argc , char *argv[] ) {
 
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY;
     double omega = 5.0;
-    struct chebopts opts;
     int k, res;
     FILE *out, *pipe;
     
-    /* Get a copy of the default options. */
-    memcpy( &opts , &chebopts_default , sizeof(struct chebopts) );
-    /* opts.flags |= chebopts_flag_resampling; */
-    
     
     /* Initialize the fun f1 (vector real). */
-    if ( ( res = fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , &opts , NULL ) ) < 0 ) {
+    if ( ( res = fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , NULL ) ) < 0 ) {
         printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
         errs_dump(stdout);
         }
             
     /* Initialize the fun f2 (vector reall, param). */
-    if ( ( res = fun_create_vec( &f2 , &myfun_vec_param , -1.0 , 1.0 , &opts , &omega ) ) < 0 ) {
+    if ( ( res = fun_create_vec( &f2 , &myfun_vec_param , -1.0 , 1.0 , &omega ) ) < 0 ) {
         printf("fun_test: fun_create_vec failed with fun_err=%i (%s).\n",
             fun_err, fun_err_msg[-fun_err]);
         errs_dump(stdout);
