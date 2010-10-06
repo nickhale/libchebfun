@@ -1456,6 +1456,10 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
  * @return The #fun evaluated at @c x or @c NaN if an error occured
  *      (see #fun_err).
  *
+ * This function delegates the input to either #fun_eval_bary or
+ * #fun_eval_clenshaw depending on the flags in #chebopts_opts or
+ * what values are present in the #fun.
+ *
  * @sa fun_eval_bary, fun_eval_vec, fun_eval_clenshaw_vec
  */
  
@@ -1491,6 +1495,10 @@ double fun_eval ( struct fun *fun , double x ) {
  * @param out A pointer to an array of doubles of length @c m in which the
  *      values of @c fun at @c x will be stored.
  * @return #fun_err_ok or < 0 if an error occured.
+ *
+ * This function delegates the input to either #fun_eval_bary_vec or
+ * #fun_eval_clenshaw_vec depending on the flags in #chebopts_opts or
+ * what values are present in the #fun.
  *
  * @sa fun_eval_clenshaw, fun_eval, fun_eval_bary, fun_eval_bary_vec, fun_eval_clenshaw_vec
  */
