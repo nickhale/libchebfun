@@ -31,6 +31,10 @@
 #include "util.h"
 #include "fun.h"
 
+/* Local defines */
+#define PASS 0
+#define FAIL (-__LINE__)
+
 
 /*
  * These are the chebtests that we would like to implement...
@@ -162,6 +166,97 @@
  
  
 /**
+ * @brief Prolong an fun making it both larger and smaller, check the result.
+ * 
+ */
+ 
+int chebtest_prolong ( char **name ) {
+
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY;
+    int k;
+    double *v;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin( 5*(x[k]+1) ) + sin( 25 * (x[k]+1) * (x[k]+1) );
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "prolong";
+        
+    /* Create the fun f1. */
+    if ( fun_create_vec( &f1 , &thefun , -1.0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+        
+    /* Prolong the fun f1 into f2. */
+    if ( fun_prolong( &f1 , f1.n + 20 , &f2 ) < 0 )
+        return FAIL;
+        
+    /* Check if the prolonged function is identical for all practical purposes. */
+    if ( fun_madd( &f1 , 1.0 , &f2 , -1.0 , &f3 ) < 0 )
+        return FAIL;
+    if ( fun_norm2( &f3 ) > 2 * DBL_EPSILON )
+        return FAIL;
+        
+    /* Prolong (restrict) the fun f1 into f2. */
+    if ( fun_prolong( &f1 , f1.n - 10 , &f2 ) < 0 )
+        return FAIL;
+        
+    /* Check if the prolonged function matches at the nodes. */
+    if ( ( v = (double *)alloca( sizeof(double) * f2.n ) ) == NULL )
+        return FAIL;
+    if ( fun_eval_vec( &f1 , f2.points , f2.n , v ) < 0 )
+        return FAIL;
+    /* for ( k = 0 ; k < f2.n ; k++ )
+        printf("chebtest_prolong: x[%i]=%e, v[%i]=%e, f2[%i]=%e\n",
+            k,f2.points[k],k,v[k],k,f2.vals.real[k]); */
+    for ( k = 0 ; k < f2.n ; k++ )
+        if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
+            return FAIL;
+        
+    /* Copy f1 into f2. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    
+    /* Prolong the fun f2 into f2. */
+    if ( fun_prolong( &f2 , f2.n + 20 , &f2 ) < 0 )
+        return FAIL;
+        
+    /* Check if the prolonged function is identical for all practical purposes. */
+    if ( fun_madd( &f1 , 1.0 , &f2 , -1.0 , &f3 ) < 0 )
+        return FAIL;
+    if ( fun_norm2( &f3 ) > 2 * DBL_EPSILON )
+        return FAIL;
+        
+    /* Copy f1 into f2. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    
+    /* Prolong (restrict) the fun f2 into f2. */
+    if ( fun_prolong( &f2 , f2.n - 10 , &f2 ) < 0 )
+        return FAIL;
+        
+    /* Check if the prolonged function matches at the nodes. */
+    if ( fun_eval_vec( &f1 , f2.points , f2.n , v ) < 0 )
+        return FAIL;
+    /* for ( k = 0 ; k < f2.n ; k++ )
+        printf("chebtest_prolong: x[%i]=%e, v[%i]=%e, f2[%i]=%e\n",
+            k,f2.points[k],k,v[k],k,f2.vals.real[k]); */
+    for ( k = 0 ; k < f2.n ; k++ )
+        if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
+            return FAIL;
+        
+    /* All passed... */
+    fun_clean(&f1); fun_clean(&f2); fun_clean(&f3);
+    return PASS;
+        
+    }
+    
+
+/**
  * @brief Re-implementation of the chebtest sumcos20x, impemented for #fun instead
  * of #chebfun.
  * 
@@ -185,16 +280,17 @@ int chebtest_sumcos20x ( char **name ) {
         
     /* Create the fun. */
     if ( fun_create_vec( &f , &thefun , -1.0 , 1.0 , NULL ) < 0 )
-        return -__LINE__;
+        return FAIL;
         
     /* Do the first test. */
     if ( fabs( fun_integrate(&f) - sin(20.0)/10.0 ) >= 1.5e-15 * chebopts_opts->eps / DBL_EPSILON )
-        return -__LINE__;
+        return FAIL;
         
     /* TODO: multiply f by 1i! */
         
     /* If nothing went wrong, just return 0. */
-    return 0;
+    fun_clean(&f);
+    return PASS;
         
     }
     
@@ -225,27 +321,28 @@ int chebtest_max_min ( char **name ) {
         
     /* Create the funs. */
     if ( fun_create_vec( &f1 , &thefun , 0.0 , 1.0 , NULL ) < 0 )
-        return -__LINE__;
+        return FAIL;
     /* TODO: f2 should actually be in [0,inf]. */
     if ( fun_create_vec( &f2 , &thefun , 0.0 , 20.0 , NULL ) < 0 )
-        return -__LINE__;
+        return FAIL;
         
     /* Get the min and max values for f1 and f2. */
     if ( fun_minandmax( &f1 , &miny_f1 , &minx_f1 , &maxy_f1 , &maxx_f1 ) < 0 )
-        return -__LINE__;
+        return FAIL;
     if ( fun_minandmax( &f2 , &miny_f2 , &minx_f2 , &maxy_f2 , &maxx_f2 ) < 0 )
-        return -__LINE__;
+        return FAIL;
         
     /* Do the first test. */
     if ( fabs(maxx_f1 - maxx_f2) + fabs(maxy_f1 - maxy_f2) >= chebopts_opts->eps * 100 )
-        return -__LINE__;
+        return FAIL;
         
     /* Do the second test. */
     if ( fabs(minx_f1 - minx_f2) + fabs(miny_f1 - miny_f2) >= chebopts_opts->eps * 100 )
-        return -__LINE__;
+        return FAIL;
         
     /* If nothing went wrong, just return 0. */
-    return 0;
+    fun_clean(&f1); fun_clean(&f2);
+    return PASS;
         
     }
     
@@ -257,8 +354,9 @@ int chebtest_max_min ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 2;
-    int (*tests[2])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min };
+    const int ntests = 3;
+    int (*tests[3])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+        &chebtest_prolong };
     
     int k, res;
     char *name = NULL;
@@ -270,7 +368,7 @@ int main ( int argc , char *argv[] ) {
         res = (*tests[k])( &name );
         
         /* Be verbose about the result. */
-        if ( res < 0 ) {
+        if ( res != PASS ) {
             printf("chebtest: test %s failed on line %i of file %s.\n", name, -res, __FILE__ );
             errs_dump(stdout);
             }

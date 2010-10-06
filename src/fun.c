@@ -67,10 +67,10 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  * @return #fun_err_ok or < 0 if an error occured.
  */
 
-int fun_prolong( struct fun *A , unsigned int N , struct fun *B) {
+int fun_prolong( struct fun *A , unsigned int N , struct fun *B ) {
 	
 	int j, k, m;
-    double *x, a05, b05;
+    double *c;
 
     /* Bad apples? */
     if ( A == NULL || B == NULL)
@@ -78,14 +78,24 @@ int fun_prolong( struct fun *A , unsigned int N , struct fun *B) {
     if ( !( A->flags & fun_flag_init ) )
         return error(fun_err_uninit);
 
-	m = N - A->n; // The difference in lengths 
+    /* The difference in lengths. */
+	m = N - A->n;
+    
 	/* Trivial case m == 0 */
 	if (m == 0) {
-		B = A;
+    
+        /* Copy A to B if A is not already B. */
+		if ( B != A && fun_copy( A , B ) < 0 )
+            return error(fun_err);
+            
+        /* Leave the room, now. */
 		return fun_err_ok;
+        
 		}
 
+    /* Treatment if B != A. */
     if (B != A) {
+    
         /* Start by cleaning out B */
         if ( fun_init( B , N ) != fun_err_ok )
             return error(fun_err);
@@ -97,34 +107,21 @@ int fun_prolong( struct fun *A , unsigned int N , struct fun *B) {
         
         /* Trivial constant case */
         if ( A->n == 1 ) {
+        
+            /* Just copy the vals and we're done. */
             B->coeffs.real[0] = A->coeffs.real[0];
             for ( k = 1 ; k < N ; k++ )
                 B->vals.real[k] = A->vals.real[0];
-            return fun_err_ok;	
+                
             }
-        
-//      THE HEURISTIC FOR SIZES NEEDS RECHECKING IN C!
-
-        /* Barycentric case  */
-        if ( m<0 && N < 129 && A->n < 1000 ) {
-            if ( A->a != -1.0 || A->b != 1.0 ) {
-                /* Must allocate memory for shifted Chebyshev points */
-                if ( ( x = (double *)alloca( sizeof(double) * N ) ) == NULL )
-                    return error(fun_err_malloc);
-                a05 = 0.5*A->a, b05 = 0.5*A->b;
-                for ( k = 0 ; k < N ; k++ )
-                    x[k] = a05 * (1.0 + x[k]) + b05 * (1.0 - x[k]);
-                }
-            else {
-                fun_eval_vec( A , B->points , N , B->vals.real );
-                }
-            util_chebpoly ( B->vals.real , N , B->coeffs.real );
-            }
-        /* Use FFTs */
+            
+        /* Otherwise, re-create the vals. */
         else {
-            /* Prolonging */
-            if ( m > 0 )
+        
+            /* Copy the coefficients from A to B */
+            if ( N >= A->n )
                 memcpy( B->coeffs.real , A->coeffs.real , sizeof(double) * A->n );
+            
             /* Restricting - need to consider aliasing */
             else {
                 for ( k = 0 ; k < A->n ; k += 2*(N-2) )
@@ -138,10 +135,73 @@ int fun_prolong( struct fun *A , unsigned int N , struct fun *B) {
                 for ( k = N-1 ; k < A->n ; k += 2*(N-2) )
                     B->coeffs.real[N-1] += A->coeffs.real[k];
                 }
-            util_chebpolyval ( B->coeffs.real , N , B->vals.real );
+                
+            /* Get the vals at the new points. */
+            if ( util_chebpolyval( B->coeffs.real , N , B->vals.real ) < 0 )
+                return error(fun_err_util);
+            
             }
+            
         }
+        
+    /* Treatment if B == A and the function needs to grow. */
+    else if ( N > A->n ) {
+    
+        /* Allocate a new coeffs array and fill it with the old coeffs. */
+        if ( posix_memalign( (void **)&c , 16 , sizeof(double) * N ) != 0 )
+            return error(fun_err_malloc);
+        memcpy( A->coeffs.real , c , sizeof(double) * A->n );
+        bzero( &(c[A->n]) , sizeof(double) * (N - A->n) );
+        free( B->coeffs.real );
+        B->coeffs.real = c;
+        
+        /* Generate the new points. */
+        free( B->points );
+        if ( ( B->points = util_chebpts_alloc( N ) ) == NULL )
+            return error(fun_err_util);
+    
+        /* Re-allocate the vals and generate the new values with the FFT. */
+        free( B->vals.real );
+        if ( ( B->vals.real = util_chebpolyval_alloc( B->coeffs.real , N ) ) == NULL )
+            return error(fun_err_util);
+            
+        /* Set the new length. */
+        B->n = N;
 
+        }
+        
+    /* Otherwise, B == A and the function is shrinking. */
+    else {
+    
+        /* Adjust the coefficients. */
+        if ( ( c = (double *)alloca( sizeof(double) * N ) ) == NULL )
+            return error(fun_err_malloc);
+        bzero( c , sizeof(double) * N );
+        for ( k = 0 ; k < A->n ; k += 2*(N-2) )
+            c[0] += A->coeffs.real[k];
+        for ( j = 1 ; j < N-1 ; j++ ) {
+            for ( k = j ; k < A->n ; k += 2*(N-2) )
+                c[j] += A->coeffs.real[k];
+            for ( k = 2*(N-2)-j+2 ; k < A->n ; k += 2*(N-2) )
+                c[j] += A->coeffs.real[k];
+            }
+        for ( k = N-1 ; k < A->n ; k += 2*(N-2) )
+            c[N-1] += A->coeffs.real[k];
+        memcpy( A->coeffs.real , c , sizeof(double) * N );
+                    
+        /* Re-create the function values. */
+        if ( util_chebpolyval( A->coeffs.real , N , B->vals.real ) < 0 )
+            return error(fun_err_util);
+            
+        /* Re-create the points. */
+        if ( util_chebpts( N , B->points ) < 0 )
+            return error(fun_err_util);
+    
+        /* Set the new length. */
+        B->n = N;
+
+        }
+        
     return fun_err_ok;
 
     }           
