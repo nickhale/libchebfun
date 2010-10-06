@@ -1449,6 +1449,71 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
     
     
 /**
+ * @brief Evaluates the given fun at the given node @c x.
+ *
+ * @param fun The #fun to be evaluated.
+ * @param x The position at which to evaluate @c fun.
+ * @return The #fun evaluated at @c x or @c NaN if an error occured
+ *      (see #fun_err).
+ *
+ * @sa fun_eval_bary, fun_eval_vec, fun_eval_clenshaw_vec
+ */
+ 
+double fun_eval ( struct fun *fun , double x ) {
+
+    /* Check for nonsense. */
+    if ( fun == NULL ) {
+        error(fun_err_null);
+        return NAN;
+        }
+    if ( !( fun->flags & fun_flag_init ) ) {
+        error(fun_err_uninit);
+        return NAN;
+        }
+        
+    /* Re-direct according to what's specified in chebopts. */
+    if ( ( chebopts_opts->flags & chebopts_flag_evalbary ) ||
+         ( fun->coeffs.real == NULL ) )
+        return fun_eval_bary( fun , x );
+    else
+        return fun_eval_clenshaw( fun , x );
+
+    }
+    
+
+/**
+ * @brief Evaluates the given fun at the given vector of nodes @c x.
+ *
+ * @param fun The #fun to be evaluated.
+ * @param x A pointer to an array of double values containing the positions
+ *      at which to evaluate @c fun.
+ * @param m The number of positions in @c x.
+ * @param out A pointer to an array of doubles of length @c m in which the
+ *      values of @c fun at @c x will be stored.
+ * @return #fun_err_ok or < 0 if an error occured.
+ *
+ * @sa fun_eval_clenshaw, fun_eval, fun_eval_bary, fun_eval_bary_vec, fun_eval_clenshaw_vec
+ */
+ 
+int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
+    
+    /* Check for nonsense. */
+    if ( fun == NULL || x == NULL || out == NULL )
+        return error(fun_err_null);
+    if ( !( fun->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+        
+    /* Re-direct according to what's specified in chebopts. */
+    if ( ( chebopts_opts->flags & chebopts_flag_evalbary ) ||
+         ( fun->coeffs.real == NULL ) )
+        return fun_eval_bary_vec( fun , x , m , out );
+    else
+        return fun_eval_clenshaw_vec( fun , x , m , out );
+
+    }
+    
+    
+/**
  * @brief Evaluates the given fun at the given node @c x using the
  *      Clenshaw algorithm.
  *
@@ -1512,8 +1577,7 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
  *
  * @sa fun_eval_clenshaw, fun_eval, fun_eval_vec
  */
- 
- 
+
 int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
 
     int j, k;
@@ -1575,10 +1639,10 @@ int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , doubl
  * @return The #fun evaluated at @c x or @c NaN if an error occured
  *      (see #fun_err).
  *
- * @sa fun_eval_clenshaw, fun_eval, fun_eval_clenshaw_vec
+ * @sa fun_eval_clenshaw, fun_eval, fun_eval_clenshaw_vec, fun_eval_bary_vec
  */
  
-double fun_eval ( struct fun *fun , double x ) {
+double fun_eval_bary ( struct fun *fun , double x ) {
 
     int k;
     double w, u = 0.0, v = 0.0, m, ih;
@@ -1646,10 +1710,10 @@ double fun_eval ( struct fun *fun , double x ) {
  *      values of @c fun at @c x will be stored.
  * @return #fun_err_ok or < 0 if an error occured.
  *
- * @sa fun_eval_clenshaw, fun_eval_vec, fun_eval_clenshaw_vec
+ * @sa fun_eval_clenshaw, fun_eval_bary, fun_eval_vec, fun_eval_clenshaw_vec
  */
  
-int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
+int fun_eval_bary_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
 
     int j, k;
     double w, u, v, xj, mi, ih;

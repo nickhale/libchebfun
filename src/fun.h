@@ -97,6 +97,8 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
 int fun_clean ( struct fun *fun );
 double fun_eval ( struct fun *fun , double x );
 int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out );
+double fun_eval_bary ( struct fun *fun , double x );
+int fun_eval_bary_vec ( struct fun *fun , double *x , unsigned int m , double *out );
 double fun_eval_clenshaw ( struct fun *fun , double x );
 int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , double *out );
 int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , struct fun *C );
