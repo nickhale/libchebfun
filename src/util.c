@@ -56,8 +56,7 @@ const char *util_err_msg[] = {
  * @param N Number of nodes.
  * @param hscale Horizontal scale of the interval.
  * @param vscale Vertical scale of the interval, i.e. @f$\max_k |v_k|@f$.
- * @param opts Pointer to a #chebopts structure or @c NULL to use the
- *      default parameters #chebopts_default.
+ * @param eps The relative tolerace for which to test.
  * @return The expected number of points necessary for the accurate
  *      representation of the function or < 0 on error. If the
  *      interpolation is not converged, @a N is returned.

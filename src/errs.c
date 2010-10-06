@@ -51,9 +51,9 @@ void errs_clear( ) {
 
 
 /**
- * @brief Print the error stack out to the given #FILE pointer.
+ * @brief Print the error stack out to the given FILE pointer.
  *
- * @param out A pointer to a #FILE structure.
+ * @param out A pointer to a FILE structure.
  * 
  * @return #errs_err_ok or < 0 on failure.
  */
