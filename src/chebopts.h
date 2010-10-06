@@ -34,13 +34,17 @@
 #define chebopts_flag_extrapolate       16
 #define chebopts_flag_polishroots       32
 
+#define chebopts_flag_compcoeffs        64
+#define chebopts_flag_compvals          128
+#define chebopts_flag_evalbary          256
+
 
 /* Error codes. */
 #define chebopts_err_ok                 0
 
 
 /* Global, external variables. */
-extern struct chebopts *chebopts_current;
+extern struct chebopts *chebopts_opts;
 extern struct chebopts chebopts_default;
 
 

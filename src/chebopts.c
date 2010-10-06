@@ -25,12 +25,12 @@
 
 
 /**
- * @brief Default #chebopts settings.
+ * @brief Pointer to current #chebopts settings.
  * 
  * Pointer to the default #chebopts struct to be used by libchebfun.
  * Points to #chebopts_default but can be modified by the user.
  */
-struct chebopts *chebopts_current = &chebopts_default;
+struct chebopts *chebopts_opts = &chebopts_default;
 
 
 /**

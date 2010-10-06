@@ -188,7 +188,7 @@ int chebtest_sumcos20x ( char **name ) {
         return -__LINE__;
         
     /* Do the first test. */
-    if ( fabs( fun_integrate(&f) - sin(20.0)/10.0 ) >= 1.5e-15 * chebopts_current->eps / DBL_EPSILON )
+    if ( fabs( fun_integrate(&f) - sin(20.0)/10.0 ) >= 1.5e-15 * chebopts_opts->eps / DBL_EPSILON )
         return -__LINE__;
         
     /* TODO: multiply f by 1i! */
@@ -237,11 +237,11 @@ int chebtest_max_min ( char **name ) {
         return -__LINE__;
         
     /* Do the first test. */
-    if ( fabs(maxx_f1 - maxx_f2) + fabs(maxy_f1 - maxy_f2) >= chebopts_current->eps * 100 )
+    if ( fabs(maxx_f1 - maxx_f2) + fabs(maxy_f1 - maxy_f2) >= chebopts_opts->eps * 100 )
         return -__LINE__;
         
     /* Do the second test. */
-    if ( fabs(minx_f1 - minx_f2) + fabs(miny_f1 - miny_f2) >= chebopts_current->eps * 100 )
+    if ( fabs(minx_f1 - minx_f2) + fabs(miny_f1 - miny_f2) >= chebopts_opts->eps * 100 )
         return -__LINE__;
         
     /* If nothing went wrong, just return 0. */

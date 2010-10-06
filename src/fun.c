@@ -491,7 +491,7 @@ int _fun_simplify ( struct fun *fun , double tol ) {
     unsigned int N;
 
     /* Call util_simplify */
-    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , chebopts_current->eps );
+    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , chebopts_opts->eps );
 
     /* Set the new size. */
     if ( N < fun->n && N > 0)
@@ -618,7 +618,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 			return error(fun_err_lapack);
 
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
-		tol = 100.0 * chebopts_current->eps;
+		tol = 100.0 * chebopts_opts->eps;
         
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
@@ -1940,9 +1940,9 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
        releasing these if the routine fails anywhere underway.
        Note that v and coeffs are padded with 16 bytes so that they can be
        shifted and aligned to 16-byte boundaries. */
-    if ( ( x = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) ) ) == NULL ||
-         ( v = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) + 16 ) ) == NULL ||
-         ( coeffs = (double *)alloca( sizeof(double) * (chebopts_current->maxdegree + 1) + 16 ) ) == NULL )
+    if ( ( x = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) ) ) == NULL ||
+         ( v = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) + 16 ) ) == NULL ||
+         ( coeffs = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) + 16 ) ) == NULL )
         return error(fun_err_malloc);
         
     /* Shift v and coeffs such that they are 16-byte aligned. */
@@ -1950,18 +1950,18 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     coeffs = (double *)( (((size_t)coeffs) + 15 ) & ~15 );
     
     /* Init the length N. */
-    N = chebopts_current->minsamples;
+    N = chebopts_opts->minsamples;
         
     /* Make sure the nodes have been pre-allocated. */
-    if ( !(chebopts_current->flags & chebopts_flag_resampling) &&
-         ( nr_xi < chebopts_current->maxdegree + 1 || (nr_xi - 1) % (N - 1) != 0 ) ) {
+    if ( !(chebopts_opts->flags & chebopts_flag_resampling) &&
+         ( nr_xi < chebopts_opts->maxdegree + 1 || (nr_xi - 1) % (N - 1) != 0 ) ) {
     
         /* Clean up old nodes. */
         if ( xi != NULL )
             free(xi);
             
         /* Set the nr of nodes. */
-        for ( nr_xi = chebopts_current->minsamples ; nr_xi < chebopts_current->maxdegree + 1 ; nr_xi = 2*nr_xi - 1 );
+        for ( nr_xi = chebopts_opts->minsamples ; nr_xi < chebopts_opts->maxdegree + 1 ; nr_xi = 2*nr_xi - 1 );
             
         /* Allocate the nodes. */
         if ( ( xi = (double *)malloc( sizeof(double) * nr_xi ) ) == NULL )
@@ -1978,7 +1978,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     while ( 1 ) {
     
         /* If we are re-sampling, get the nodes for arbitrary N. */
-        if ( chebopts_current->flags & chebopts_flag_resampling ) {
+        if ( chebopts_opts->flags & chebopts_flag_resampling ) {
         
             /* Get the N chebpts. */
             if ( util_chebpts( N , x ) < 0 )
@@ -2006,7 +2006,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
             stride = (nr_xi - 1) / (N - 1);
         
             /* If this is the first go, just copy all the nodes. */
-            if ( N == chebopts_current->minsamples ) {
+            if ( N == chebopts_opts->minsamples ) {
             
                 /* Pick the N nodes out of xi. */
                 for ( k = 0 ; k < N ; k++ )
@@ -2061,7 +2061,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         
         /* Check convergence of the coefficients. */
-        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_current->eps ) ) < 0 )
+        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
             return fun_err_util;
             
         /* TODO: Sampletest? */
@@ -2073,7 +2073,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
             }
             
         /* No convergence, adjust N. */
-        if ( ( chebopts_current->flags & chebopts_flag_resampling ) && 
+        if ( ( chebopts_opts->flags & chebopts_flag_resampling ) && 
              ( N < 64 ) )
             N = (int)( ( N - 1 ) * M_SQRT2 + 1 ) | 1;
         else
