@@ -39,7 +39,7 @@ extern const char *util_err_msg[];
 
 
 /* Functions. */
-int util_chebptsAB ( unsigned int N , double *x , double A , double B );
+int util_chebptsAB ( unsigned int N , double A , double B , double *x );
 int util_chebpts ( unsigned int N , double *x );
 double * util_chebpts_alloc ( unsigned int N );
 int util_chebpoly ( double *v , unsigned int N , double *c );

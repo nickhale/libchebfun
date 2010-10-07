@@ -232,7 +232,7 @@ double *util_chebpolyval_alloc ( double *coeffs , unsigned int N ) {
  *      since the whole thing can be pipelined.
  */
  
-int util_chebptsAB ( unsigned int N , double *x , double A, double B ) {
+int util_chebptsAB ( unsigned int N , double A, double B , double *x ) {
 
     int j;
 	double A05 = 0.5*A, B05 = 0.5*B;
@@ -247,7 +247,7 @@ int util_chebptsAB ( unsigned int N , double *x , double A, double B ) {
 
 	/* Scale to [A B] */
 	for ( j = 0 ; j < N ; j++ )
-		x[j] = A05 * (1.0 + x[j]) + B05 * (1.0 - x[j]);
+		x[j] = A05 * (1.0 - x[j]) + B05 * (1.0 + x[j]);
         
     /* If all went well... */
     return util_err_ok;

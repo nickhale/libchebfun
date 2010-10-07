@@ -407,6 +407,7 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
     return fun_err_ok;
     
     }
+    
 
 /**
  * @brief Restrict a fun to a subinterval of its domain
@@ -424,7 +425,7 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
 
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) {
     
-    double iba, *x;
+    double m, hi, *x;
     int j;
     
     /* Check inputs. */
@@ -438,10 +439,11 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_malloc);
 
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
-    iba = 1.0/(fun->b-fun->a);
+    m = ( fun->a + fun->b ) * 0.5;
+    hi = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
         //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
-        x[j] = B * (fun->points[j] + 1.0) * iba + A * (1.0 - fun->points[j]) * iba;
+        x[j] = m + ( B * (fun->points[j] + 1.0) * hi + A * (1.0 - fun->points[j]) * hi );
 
     if (fun == funout) {
 
@@ -459,17 +461,24 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
 
         }
     else {
+    
         /* Start by cleaning out funout */
-        if ( !( funout->flags & fun_flag_init ) || ( funout->n < fun->n ) )
+        if ( !( funout->flags & fun_flag_init ) || ( funout->n < fun->n ) ) {
             if ( fun_init( funout , fun->n ) != fun_err_ok )
                 return error(fun_err);
+            }
+        else {
+            funout->n = fun->n;
+            memcpy( funout->points , fun->points , sizeof(double) * fun->n );
+            }
                 
         /* Pass some variables to the new fun */
         funout->flags = fun->flags;
 
         /* Get the restricted values. */
-//        fun_eval_vec ( fun , x , fun->n ,  funout->vals.real );
-        fun_eval_clenshaw_vec ( fun , x , fun->n ,  funout->vals.real );
+//        fun_eval_vec ( fun , x , fun->n , funout->vals.real );
+        fun_eval_clenshaw_vec ( fun , x , fun->n , funout->vals.real );
+        
         }
         
     /* Set the new limits. */
@@ -905,6 +914,7 @@ inline void _fun_rescale ( struct fun *fun ) {
     for ( k = 0 ; k < fun->n ; k++ )
         if ( scale < fabs( fun->vals.real[k] ) )
             scale = fabs( fun->vals.real[k] );
+        
     fun->scale = scale;
     
     }
@@ -925,10 +935,6 @@ int fun_init ( struct fun *fun , unsigned int N ) {
     /* Check for null and stuff. */
     if ( fun == NULL )
         return error(fun_err_null);
-        
-    /* Clean the fun, just to be safe. */
-    if ( fun_clean( fun ) < 0 )
-        return error(fun_err);
         
     /* Allocate the data inside the fun to the correct size. */
     _fun_alloc( fun , N);
@@ -960,6 +966,10 @@ int fun_init ( struct fun *fun , unsigned int N ) {
 
 int _fun_alloc ( struct fun *fun , unsigned int N ) {
 
+    /* Clean the fun, just to be safe. */
+    if ( fun_clean( fun ) < 0 )
+        return error(fun_err);
+        
     /* Allocate the data inside the fun to the correct size. */
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
          posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
@@ -1485,6 +1495,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
                 return error(fun_err);
             
         /* Set the domain. */
+        C->n = a->n;
         C->a = a->a; C->b = a->b;
             
         /* Copy the points from a. */
@@ -1493,26 +1504,27 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
         /* Merge the coefficients from a and b. */
         for ( k = 0 ; k < b->n ; k++ )
             C->coeffs.real[k] = wa * a->coeffs.real[k] + wb * b->coeffs.real[k];
-        for ( k=k ; k < a->n ; k++ )
+        for ( k = b->n ; k < a->n ; k++ )
             C->coeffs.real[k] = wa * a->coeffs.real[k];
                 
         /* Are a and b the same length? */
-        if ( a->n == b->n )
+        if ( a->n == b->n ) {
         
             /* Merge the vals from a and b. */
             for ( k = 0 ; k < C->n ; k++ )
                 C->vals.real[k] = wa * a->vals.real[k] + wb * b->vals.real[k];
                 
+            }
+                
         /* Different lengths in a and b. */
-        else
+        else {
         
             /* Extract the vals from these coeffs. */
             if ( util_chebpolyval( C->coeffs.real , C->n , C->vals.real ) < 0 )
                 return fun_err_util;
                 
-        /* As of here, this fun is initialized. */
-        C->flags |= fun_flag_init;
-            
+            }
+                
         }
         
     /* Is C == a? */
@@ -2310,10 +2322,12 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         
     /* Allocate the data inside the fun to the correct size. */
-    if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
-         posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
-         ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
-        return error(fun_err_malloc);
+    if ( !( fun->flags & fun_flag_init ) || fun->n < N ) {
+        if ( _fun_alloc( fun , N ) < 0 )
+            return error(fun_err);
+        }
+    else
+        fun->n = N;
     
     /* Write the data to the fun. */
     memcpy( fun->vals.real , v , sizeof(double) * N );
@@ -2322,8 +2336,6 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     fun->scale = scale;
     fun->a = a;
     fun->b = b;
-    fun->n = N;
-    fun->flags = fun_flag_init;
     
     /* If nothing bad happened until here, we're done! */
     return fun_err_ok;
