@@ -425,7 +425,7 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
 
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) {
     
-    double hi, *x;
+    double *x;
     int j;
     
     /* Check inputs. */
@@ -439,22 +439,12 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_malloc);
 
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
-    hi = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
         //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
-        x[j] = ( B * (fun->points[j] + 1.0) * hi + A * (1.0 - fun->points[j]) * hi );
-
+        x[j] = B * 0.5 * (fun->points[j] + 1.0) + A * 0.5 * (1.0 - fun->points[j]);
+        
     if (fun == funout) {
 
-//        /* Allocate some storage for evaluations */
-//        if ( ( out = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
-//            return error(fun_err_malloc);
-//        /* Get the restricted values. */
-//        fun_eval_vec ( fun , x , fun->n ,  out );
-//        /* Assign to vals */
-//        memcpy( fun->vals.real , out , sizeof(double) * fun->n );
-
-        /* (If you use clenshaw below, you don't need to alloc out!) */    
         /* Get the restricted values. */
         fun_eval_clenshaw_vec ( fun , x , fun->n ,  funout->vals.real );
 
@@ -475,7 +465,6 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         funout->flags = fun->flags;
 
         /* Get the restricted values. */
-//        fun_eval_vec ( fun , x , fun->n , funout->vals.real );
         fun_eval_clenshaw_vec ( fun , x , fun->n , funout->vals.real );
         
         }

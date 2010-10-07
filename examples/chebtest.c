@@ -80,8 +80,29 @@ int chebtest_restrict ( char **name ) {
     
     /* Compare the results. */
     for ( k = 0 ; k < f2.n ; k++ ) {
-        printf("chebtest_restrict: x[%i]=%e, v[%i]=%e, f2[%i]=%e\n",
-            k, x[k], k, v[k], k, f2.vals.real[k] );
+        if ( fabs( v[k] - f2.vals.real[k] ) > 10 * f1.scale * DBL_EPSILON )
+            return FAIL;
+        }
+    
+    /* Copy f1 to f2 and restrict to the domain [2,7]. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_restrict( &f2 , 2.0 , 7.0 , &f2 ) < 0 )
+        return FAIL;
+    
+    /* Allocate the temporary vector for the nodes and function values. */
+    if ( ( x = (double *)alloca( sizeof(double) * f1.n ) ) == NULL ||
+         ( v = (double *)alloca( sizeof(double) * f1.n ) ) == NULL )
+        return FAIL;
+        
+    /* Evaluate f1 at the nodes of f2. */
+    if ( util_chebptsAB( f2.n , f2.a , f2.b , x ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f1 , x , f2.n , v ) < 0 )
+        return FAIL;
+    
+    /* Compare the results. */
+    for ( k = 0 ; k < f2.n ; k++ ) {
         if ( fabs( v[k] - f2.vals.real[k] ) > 10 * f1.scale * DBL_EPSILON )
             return FAIL;
         }
