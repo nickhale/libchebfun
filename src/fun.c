@@ -425,7 +425,7 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
 
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) {
     
-    double m, hi, *x;
+    double hi, *x;
     int j;
     
     /* Check inputs. */
@@ -439,11 +439,10 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_malloc);
 
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
-    m = ( fun->a + fun->b ) * 0.5;
     hi = 1.0/(fun->b-fun->a);
     for (j = 0 ; j < fun->n ; j++ )
         //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
-        x[j] = m + ( B * (fun->points[j] + 1.0) * hi + A * (1.0 - fun->points[j]) * hi );
+        x[j] = ( B * (fun->points[j] + 1.0) * hi + A * (1.0 - fun->points[j]) * hi );
 
     if (fun == funout) {
 
