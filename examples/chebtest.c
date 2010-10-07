@@ -42,6 +42,49 @@
  * 
  */
  
+int chebtest_simplify ( char **name ) {
+
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin( x[k] ) + sin( x[k] * x[k] );
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "simplify";
+    
+    /* Create f1. */
+    if ( fun_create_vec( &f1 , &thefun , 0.0 , 10.0 , NULL ) < 0 )
+        return FAIL;
+        
+    /* Prolong f1 into f2. */
+    if ( fun_prolong( &f1 , f1.n , &f2 ) < 0 )
+        return FAIL;
+        
+    /* Simplify f2. */
+    if ( fun_simplify( &f2 , chebopts_opts->eps ) < 0 )
+        return FAIL;
+        
+    /* Are f1 and f2 of the same length? */
+    if ( f1.n != f2.n )
+        return FAIL;
+    
+    /* All passed... */
+    fun_clean(&f1); fun_clean(&f2);
+    return PASS;
+    
+    }
+    
+/**
+ * @brief Compute the Inf-norm for a bunch of function for which we
+ *      know what's going on.
+ * 
+ */
+ 
 int chebtest_restrict ( char **name ) {
 
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
@@ -464,10 +507,10 @@ int chebtest_cumsumcos100x ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 7;
-    int (*tests[7])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 8;
+    int (*tests[8])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
-        &chebtest_restrict , &chebtest_cumsumcos100x };
+        &chebtest_restrict , &chebtest_cumsumcos100x , &chebtest_simplify };
     
     int k, res;
     char *name = NULL;
