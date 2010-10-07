@@ -1219,7 +1219,7 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
  * @brief Integrate a fun over its domain.
  *
  * @param fun The #fun to be integrated.
- * @return the value of the intagral or @c NAN if an error was encountered.
+ * @return the value of the integral or @c NAN if an error was encountered.
  */
 
 double fun_integrate ( struct fun *fun ) {
@@ -1247,7 +1247,102 @@ double fun_integrate ( struct fun *fun ) {
     return val;
 
     }
+
+
+/**
+ * @brief Indefinite integral of a fun.
+ *
+ * @param A The #fun to be integrated.
+ * @param B The indefinite integral.
+ * @return #fun_err_ok or < 0 if an error occurs.
+ */
+
+int fun_indef_integral ( struct fun *A , struct fun *B ) {
+
+    int k, n;
+    double  sgn;
+
+    /* Check for the usual problems... */
+    if ( A == NULL || B == NULL )
+        return error(fun_err_null);
+    if ( !( A->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+        
+    /* Get the size */
+    n = A->n;
+
+    /* Are A and B one and the same? */
+    if ( A == B ) {
+
+        }
+    /* A and B are not the same fun. */
+    else {
+    
+        /* Start by cleaning out B */
+        if ( fun_clean( B ) != fun_err_ok )
+            return error(fun_err);
+        /* Make it one larger than A */
+        fun_init ( B , n+1 );
+        B->a = A->a;
+        B->b = A->b;
+
+        /* Deal with the special cases */
+        if ( n == 1 ) {
+            B->coeffs.real[1] = A->coeffs.real[0];
+            }
+        else if (n == 2) {
+            B->coeffs.real[1] = A->coeffs.real[0];
+            B->coeffs.real[2] = 0.25 * A->coeffs.real[1];
+            }
+        else {
+            /* Recurrence */
+            B->coeffs.real[1] = A->coeffs.real[0] - 0.5*A->coeffs.real[2];
+            for ( k = 0 ; k < n-3 ; k++ )
+                B->coeffs.real[k+2] = 0.5 * ( A->coeffs.real[k+1] - A->coeffs.real[k+3] ) / (double)(k+2);
+            B->coeffs.real[n-1] = 0.5 * A->coeffs.real[n-2] / (double)(n-1);
+            B->coeffs.real[n] = 0.5 * A->coeffs.real[n-1] / (double)(n);
+            }    
+
+        /* Get the constant term */
+        sgn = 1.0;
+        B->coeffs.real[0] = 0.0;
+        for ( k = 1 ; k < n+1 ; k++ ) {
+            B->coeffs.real[0] += sgn * B->coeffs.real[k];
+            sgn = -sgn;
+            }
+
+        /* Compute the new values. */
+        if ( util_chebpolyval( B->coeffs.real , B->n , B->vals.real ) < 0 )
+            return error(fun_err_util);
+                                
+        /* Get the scale of the new fun. */
+        _fun_rescale( B );
+
+        }            
+        
+    /* We made it! */
+    return fun_err_ok;
+        
+    }
      
+/**
+function g = cumsum_unit_interval(g)
+
+
+c = [0;0;chebpoly(g)];                        % obtain Cheb coeffs {c_r}
+cout = zeros(n-1,1);                          % initialize vector {C_r}
+cout(1:n-1) = (c(3:end-1)-c(1:end-3))./...    % compute C_(n+1) ... C_2
+    (2*(n:-1:2)');
+cout(n,1) = c(end) - c(end-2)/2;              % compute C_1
+v = ones(1,n); v(end-1:-2:1) = -1;
+cout(n+1,1) = v*cout;                         % compute C_0
+g.vals = chebpolyval(cout);
+g.scl.v = max(g.scl.v, norm(g.vals,inf));
+g.n = n+1;
+
+end
+
+**/
      
 /**
  * @brief Scale the given fun by a scalar value.
@@ -1932,7 +2027,7 @@ int fun_create_nonadapt ( struct fun *fun , double (*fx)( double x , void * ) , 
 
 	/* Evaluate the function */
 	for ( j = 0 ; j < N ; j++ )
-    	fun->vals.real[j] = (fx)( b05 * (fun->points[j] + 1.0) + a05 * (1.0 - fun->points[j]) , data );
+    	fun->vals.real[j] = (*fx)( b05 * (fun->points[j] + 1.0) + a05 * (1.0 - fun->points[j]) , data );
 
     /* Compute the coeffs from the values. */
     if ( util_chebpoly( fun->vals.real , N , fun->coeffs.real ) < 0 )

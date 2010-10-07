@@ -105,6 +105,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
 int fun_add ( struct fun *a , struct fun *b , struct fun *c );
 int fun_scale ( struct fun *A , double w , struct fun *B );
 double fun_integrate ( struct fun *fun );
+int fun_indef_integral ( struct fun *A , struct fun *B );
 int fun_mul ( struct fun *A , struct fun *B , struct fun *C );
 int fun_init( struct fun *fun , unsigned int N );
 int _fun_alloc ( struct fun *fun , unsigned int N );

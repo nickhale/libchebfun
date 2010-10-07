@@ -345,8 +345,61 @@ int chebtest_max_min ( char **name ) {
     return PASS;
         
     }
+
+
+/**
+ * @brief Re-implementation of the chebtest cumsumcos100x, impemented for #fun instead
+ * of #chebfun.
+ *
+ * MISSING: Test with complex values.
+ */
+ 
+int chebtest_cumsumcos100x ( char **name ) {
+
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, err = FUN_EMPTY ;
+    double norm;
     
-    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = cos( 100.0  * x[k] );
+        return 0;
+        }
+
+    /* Derivative of the above. */
+    int thefun_prime ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin( 100.0 * x[k] ) / 100.0;
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "cumsumcos100x";
+        
+    /* Create the funs. */
+    if ( fun_create_vec( &f1 , &thefun , 10.0 , 13.0 , NULL ) < 0 )
+        return FAIL;
+    if ( fun_create_vec( &f2 , &thefun_prime , 10.0 , 13.0 , NULL ) < 0 )
+        return FAIL;
+
+    /* Compute the indefinite integral. */
+    if ( fun_indef_integral( &f1 , &f3 ) < 0 )
+        return FAIL;
+        
+    /* Do the first test. */
+    fun_madd ( &f3 , 1.0 , &f2 , -1.0 , &err );
+    if ( ( norm = fun_norm_inf( &err ) ) < 0 )
+        return FAIL;
+
+    /* If nothing went wrong, just return 0. */
+    fun_clean(&f1); fun_clean(&f2); fun_clean(&f3); fun_clean(&err);
+    return PASS;
+        
+    }
+
+
 /**
  * @brief Runs through a list of tests and reports errors.
  */
@@ -354,9 +407,9 @@ int chebtest_max_min ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 3;
-    int (*tests[3])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
-        &chebtest_prolong };
+    const int ntests = 4;
+    int (*tests[4])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+        &chebtest_prolong , &chebtest_cumsumcos100x};
     
     int k, res;
     char *name = NULL;
