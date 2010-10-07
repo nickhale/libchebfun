@@ -37,9 +37,8 @@
 
 
 /**
- * @brief Compute the Inf-norm for a bunch of function for which we
- *      know what's going on.
- * 
+ * @brief Prolong and simplify a function and check that the new size is
+ *      the original size.
  */
  
 int chebtest_simplify ( char **name ) {
@@ -79,10 +78,10 @@ int chebtest_simplify ( char **name ) {
     
     }
     
+    
 /**
  * @brief Compute the Inf-norm for a bunch of function for which we
  *      know what's going on.
- * 
  */
  
 int chebtest_restrict ( char **name ) {
@@ -160,7 +159,6 @@ int chebtest_restrict ( char **name ) {
 /**
  * @brief Compute the Inf-norm for a bunch of function for which we
  *      know what's going on.
- * 
  */
  
 int chebtest_norm_inf ( char **name ) {
