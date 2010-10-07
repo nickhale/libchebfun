@@ -37,6 +37,70 @@
 
 
 /**
+ * @brief Create Wilkinson's famous polynomial and see if we can
+ *      recover the roots.
+ */
+ 
+int chebtest_roots ( char **name ) {
+
+    struct fun x = FUN_EMPTY, p = FUN_EMPTY;
+    double v[2] = { 1.0 , 20.0 }, roots[20], temp;
+    int j, k, nroots;
+    
+    /* Set the function name. */
+    *name = "roots";
+    
+    /* Create x. */
+    if ( fun_create_vals( &x , v , 1.0 , 20.0 , 2 ) < 0 )
+        return FAIL;
+        
+    /* Create an initial, constant p. */
+    if ( fun_create_vals( &p , v , 1.0 , 20.0 , 1 ) < 0 )
+        return FAIL;
+        
+    /* Loop and add roots to p. */
+    for ( k = 1 ; k <= 20 ; k++ ) {
+    
+        /* Shift x by -1. */
+        if ( fun_add_const( &x , -1.0 , &x ) < 0 )
+            return FAIL;
+            
+        /* Multiply the shifted x into p. */
+        if ( fun_mul( &p , &x , &p ) < 0 )
+            return FAIL;
+            
+        }
+        
+    /* Collect the roots. */
+    if ( ( nroots = fun_roots( &p , roots ) ) < 0 )
+        return FAIL;
+        
+    /* Did we get the right number? */
+    if ( nroots != 20 )
+        return FAIL;
+        
+    /* Sort the roots. */
+    for ( j = 0 ; j < 19 ; j++ )
+        for ( k = j + 1 ; k < 20 ; k++ )
+            if ( roots[j] > roots[k] ) {
+                temp = roots[j];
+                roots[j] = roots[k];
+                roots[k] = temp;
+                }
+                
+    /* Check the correctnes of the roots. */
+    for ( k = 0 ; k < 20 ; k++ )
+        if ( fabs( roots[k] - (k+1) ) > 1.0e-8 )
+            return FAIL;
+    
+    /* All passed... */
+    fun_clean(&x); fun_clean(&p);
+    return PASS;
+    
+    }
+    
+    
+/**
  * @brief Prolong and simplify a function and check that the new size is
  *      the original size.
  */
@@ -505,10 +569,11 @@ int chebtest_cumsumcos100x ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 8;
-    int (*tests[8])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 9;
+    int (*tests[9])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
-        &chebtest_restrict , &chebtest_cumsumcos100x , &chebtest_simplify };
+        &chebtest_restrict , &chebtest_cumsumcos100x , &chebtest_simplify ,
+        &chebtest_roots };
     
     int k, res;
     char *name = NULL;

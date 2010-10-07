@@ -721,7 +721,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 			return error(fun_err_lapack);
 
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
-		tol = 100.0 * chebopts_opts->eps;
+		tol = 100.0 * (fun->b - fun->a) * chebopts_opts->eps;
         
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
@@ -872,7 +872,7 @@ double fun_norm2 ( struct fun *fun ) {
  * @return #fun_err_ok or < 0 if an error occured.
  */
  
-int fun_display ( struct fun *fun ) {
+int fun_display ( struct fun *fun , FILE *out ) {
 
     int k;
     double xk, a05, b05;
@@ -888,10 +888,10 @@ int fun_display ( struct fun *fun ) {
     /* Loop over the entries */
     for ( k = 0 ; k < fun->n ; k++ ) {
         xk = b05 * (fun->points[k] + 1.0) + a05 * (1.0 - fun->points[k]);
-        printf("fun.points[%i]=%16.16e \tfun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
+        fprintf(out,"fun.points[%i]=%16.16e \tfun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
             k, xk, k, fun->vals.real[k], k, fun->coeffs.real[k]);
         }
-    printf("\n");
+    fprintf(out,"\n");
     
     /* Huzzah! */
     return fun_err_ok;
@@ -1048,8 +1048,12 @@ int fun_create_vals ( struct fun *fun , double *vals , double a , double b , uns
     fun->b = b;
     
     /* Compute the coeffs from the values. */
-    if ( util_chebpoly( vals , N , fun->coeffs.real ) < 0 )
-        return error(fun_err_util);
+    if ( N == 1 )
+        fun->coeffs.real[0] = vals[0];
+    else {
+        if ( util_chebpoly( vals , N , fun->coeffs.real ) < 0 )
+            return error(fun_err_util);
+        }
         
     /* Update the scale */
     _fun_rescale( fun );
@@ -1088,8 +1092,12 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
     fun->b = b;
     
     /* Compute the values from the coeffs. */
-    if ( util_chebpolyval( coeffs , N , fun->vals.real ) < 0 )
+    if ( N == 1 )
+        fun->vals.real[0] = fun->coeffs.real[0];
+    else {
+        if ( util_chebpolyval( coeffs , N , fun->vals.real ) < 0 )
         return error(fun_err_util);
+        }
         
     /* Update the scale */
     _fun_rescale( fun );

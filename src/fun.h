@@ -117,7 +117,7 @@ int fun_rescale ( struct fun *fun );
 void _fun_rescale ( struct fun *fun );
 double fun_norm2 ( struct fun *fun );
 int fun_diff ( struct fun *f, struct fun *fp );
-int fun_display ( struct fun *fun );
+int fun_display ( struct fun *fun , FILE *out );
 int fun_simplify ( struct fun *fun, double tol );
 int _fun_simplify ( struct fun *fun, double tol );
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout);

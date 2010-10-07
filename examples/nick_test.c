@@ -59,9 +59,9 @@ int main ( int argc , char *argv[] ) {
     fun_create_vec( &f1 , &myfun , -1.0 , 1.0 , NULL );
 
 	/* Test cumsum. */
-    fun_display( &f1 );
+    fun_display( &f1 , stdout );
     fun_indef_integral( &f1, &f2 );
-    fun_display( &f2 );
+    fun_display( &f2 , stdout );
 
 	/* Clean f1 */
 	fun_clean( &f1 );
