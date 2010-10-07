@@ -57,7 +57,53 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
 
 
 /**
- * @brief prolong a fun to a different number of Chebyshev points.
+ * @brief Add a constant value to a #fun.
+ *
+ * @param A The input #fun.
+ * @param x The constant to add to @c A.
+ * @param B A #fun in which to store the result, may also be @c A.
+ *
+ * @return #fun_err_ok or < 0 on error (see #fun_err).
+ */
+ 
+int fun_add_const ( struct fun *A , double x , struct fun *B ) {
+
+    int k;
+
+    /* Routine checks of sanity. */
+    if ( A == NULL || B == NULL)
+        return error(fun_err_null);
+    if ( !( A->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* We have to copy A into B if A != B. */
+    if ( A != B ) {
+    
+        /* Make a copy of A in B. */
+        if ( fun_copy( A , B ) < 0 )
+            return error(fun_err);
+            
+        }
+
+    /* Shift the 0th coefficient. */
+    B->coeffs.real[0] += x;
+    
+    /* Shift the vals and re-compute the scale while we're at it. */
+    B->scale = 0.0;
+    for ( k = 0 ; k < B->n ; k++ ) {
+        B->vals.real[k] += x;
+        if ( fabs( B->vals.real[k] ) > B->scale )
+            B->scale = fabs( B->vals.real[k] );
+        }
+    
+    /* And so to bed... */
+    return fun_err_ok;
+
+    }
+
+
+/**
+ * @brief Prolong a fun to a different number of Chebyshev points.
  *
  * @param A The #fun to prolong.
  * @param N The desired length.
