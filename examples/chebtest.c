@@ -441,6 +441,15 @@ int chebtest_cumsumcos100x ( char **name ) {
     if ( ( norm = fun_norm_inf( &err ) ) < 0 )
         return FAIL;
 
+    /* Compute the indefinite integral into f1. */
+    if ( fun_indef_integral( &f1 , &f1 ) < 0 )
+        return FAIL;
+        
+    /* Do the second test. */
+    fun_madd ( &f1 , 1.0 , &f2 , -1.0 , &err );
+    if ( ( norm = fun_norm_inf( &err ) ) < 0 )
+        return FAIL;
+
     /* If nothing went wrong, just return 0. */
     fun_clean(&f1); fun_clean(&f2); fun_clean(&f3); fun_clean(&err);
     return PASS;

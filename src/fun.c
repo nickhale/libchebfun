@@ -1257,8 +1257,8 @@ double fun_integrate ( struct fun *fun ) {
 
 int fun_indef_integral ( struct fun *A , struct fun *B ) {
 
-    int k, n;
-    double  sgn;
+    int k, n, sgn;
+    double *c;
 
     /* Check for the usual problems... */
     if ( A == NULL || B == NULL )
@@ -1271,53 +1271,74 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
 
     /* Are A and B one and the same? */
     if ( A == B ) {
-
+    
+        /* Allocate a temporary array for the new coefficients. */
+        if ( ( c = (double *)alloca( sizeof(double) * A->n ) ) == NULL )
+            return error(fun_err_malloc);
+        memcpy( c , A->coeffs.real , sizeof(double) * A->n );
+            
+        /* Re-allocate the data in A. */
+        if ( fun_init( B , A->n + 1 ) < 0 )
+            return error(fun_err);
+        
         }
+        
     /* A and B are not the same fun. */
     else {
     
-        /* Start by cleaning out B */
-        if ( fun_clean( B ) != fun_err_ok )
-            return error(fun_err);
-        /* Make it one larger than A */
-        fun_init ( B , n+1 );
+        /* Start by cleaning out B if needed. */
+        if ( !( B->flags & fun_flag_init ) || B->n < A->n + 1 ) {
+            if ( fun_init( B , A->n + 1 ) < 0 )
+                return error(fun_err);
+            }
+        else {
+            B->n = A->n + 1;
+            if ( util_chebpts( B->n , B->points ) < 0 )
+                return error(fun_err_util);
+            }
+            
+        /* Set the bounds of B. */
         B->a = A->a;
         B->b = A->b;
 
-        /* Deal with the special cases */
-        if ( n == 1 ) {
-            B->coeffs.real[1] = A->coeffs.real[0];
-            }
-        else if (n == 2) {
-            B->coeffs.real[1] = A->coeffs.real[0];
-            B->coeffs.real[2] = 0.25 * A->coeffs.real[1];
-            }
-        else {
-            /* Recurrence */
-            B->coeffs.real[1] = A->coeffs.real[0] - 0.5*A->coeffs.real[2];
-            for ( k = 0 ; k < n-3 ; k++ )
-                B->coeffs.real[k+2] = 0.5 * ( A->coeffs.real[k+1] - A->coeffs.real[k+3] ) / (double)(k+2);
-            B->coeffs.real[n-1] = 0.5 * A->coeffs.real[n-2] / (double)(n-1);
-            B->coeffs.real[n] = 0.5 * A->coeffs.real[n-1] / (double)(n);
-            }    
-
-        /* Get the constant term */
-        sgn = 1.0;
-        B->coeffs.real[0] = 0.0;
-        for ( k = 1 ; k < n+1 ; k++ ) {
-            B->coeffs.real[0] += sgn * B->coeffs.real[k];
-            sgn = -sgn;
-            }
-
-        /* Compute the new values. */
-        if ( util_chebpolyval( B->coeffs.real , B->n , B->vals.real ) < 0 )
-            return error(fun_err_util);
-                                
-        /* Get the scale of the new fun. */
-        _fun_rescale( B );
-
-        }            
+        /* Set c. */
+        c = A->coeffs.real;
         
+        }
+            
+            
+    /* Compute the coefficients of the integral. */
+    if ( n == 1 ) {
+        B->coeffs.real[1] = c[0];
+        }
+    else if (n == 2) {
+        B->coeffs.real[1] = c[0];
+        B->coeffs.real[2] = 0.25 * c[1];
+        }
+    else {
+        /* Recurrence */
+        B->coeffs.real[1] = c[0] - 0.5*c[2];
+        for ( k = 0 ; k < n-3 ; k++ )
+            B->coeffs.real[k+2] = 0.5 * ( c[k+1] - c[k+3] ) / (k + 2);
+        B->coeffs.real[n-1] = 0.5 * c[n-2] / (n - 1);
+        B->coeffs.real[n] = 0.5 * c[n-1] / n;
+        }
+
+    /* Get the constant term */
+    sgn = 1;
+    B->coeffs.real[0] = 0.0;
+    for ( k = 1 ; k < n+1 ; k++ ) {
+        B->coeffs.real[0] += sgn * B->coeffs.real[k];
+        sgn = -sgn;
+        }
+        
+    /* Compute the new values. */
+    if ( util_chebpolyval( B->coeffs.real , B->n , B->vals.real ) < 0 )
+        return error(fun_err_util);
+
+    /* Get the scale of the new fun. */
+    _fun_rescale( B );
+
     /* We made it! */
     return fun_err_ok;
         
