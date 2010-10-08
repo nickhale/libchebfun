@@ -55,7 +55,7 @@ int myfun2 ( const double *x , unsigned int N , double *out , void *data ) {
     int k;
 
     for ( k = 0 ; k < N ; k++ ) {
-        out[k] = cos( M_PI * x[k] ) + sin( M_PI * x[k] ) + 1e-14;
+        out[k] = cos( M_PI * x[k] ) + sin( M_PI * x[k] );
         }
 
     return 0;
@@ -74,7 +74,7 @@ int main ( int argc , char *argv[] ) {
     /* Initialize the fun f1 (vector real). */
     fun_create_vec( &f1 , &myfun , -1.0 , 1.0 , NULL );
 
-    fun_create_vec( &f2 , &myfun2 , -1.0 , 1.0 , NULL );
+    fun_create_vec( &f2 , &myfun , -1.0 , 1.0 , NULL );
 
 	/* Test cumsum.
     fun_display( &f1 , stdout );
@@ -82,6 +82,9 @@ int main ( int argc , char *argv[] ) {
     fun_display( &f2 , stdout ); */
 
     printf("error = %e\n", fun_err_norm_inf( &f1, &f2 ));
+
+    printf("equal = %i\n", fun_isequal( &f1, &f2 ));
+
 
 	/* Clean */
 	fun_clean( &f1 );

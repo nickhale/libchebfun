@@ -103,6 +103,44 @@ int fun_add_const ( struct fun *A , double x , struct fun *B ) {
 
 
 /**
+ * @brief Check if two funs are identical.
+ *
+ * @param A The first input #fun.
+ * @param B the second input #fun.
+ *
+ * @return 1 if A==B, 0 if A!=B, or < 0 on error (see #fun_err).
+ */
+ 
+int fun_isequal ( struct fun *A , struct fun *B ) {
+
+    int k;
+
+    /* Routine checks of sanity. */
+    if ( A == NULL || B == NULL)
+        return error(fun_err_null);
+    if ( !( A->flags & B->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* Trivial case. */
+    if ( A == B )
+        return 1;
+
+    /* Perform some basic checks. */
+    if ( (A->n != B->n) || (A->a != B->a) || (A->b != B->b) )
+        return 0;
+
+    /* Check values. */
+    for ( k = 0 ; k < A->n ; k++ )
+        if ( A->vals.real[k] != B->vals.real[k] )
+            return 0;        
+    
+    /* We made it! */
+    return 1;
+
+    }
+
+
+/**
  * @brief Prolong a fun to a different number of Chebyshev points.
  *
  * @param A The #fun to prolong.
@@ -300,7 +338,7 @@ double fun_norm_inf ( struct fun *fun ) {
  * @return #fun_err_ok or < 0 if an error occured
  */
 
-double fun_newdomain ( struct fun *fun , double a , double b) {
+int fun_newdomain ( struct fun *fun , double a , double b) {
 	
     /* Bad apples? */
     if ( fun == NULL ) {
