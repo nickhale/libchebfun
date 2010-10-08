@@ -291,6 +291,42 @@ double fun_norm_inf ( struct fun *fun ) {
 
 
 /**
+ * @brief Redefine the domain of a fun.
+ *
+ * @param fun The #fun to move.
+ * @param a The new left point.
+ * @param b The new right point.
+ *
+ * @return #fun_err_ok or < 0 if an error occured
+ */
+
+double fun_newdomain ( struct fun *fun , double a , double b) {
+	
+    /* Bad apples? */
+    if ( fun == NULL ) {
+        error(fun_err_null);
+        return NAN;
+        }
+    if ( !( fun->flags & fun_flag_init ) ) {
+        error(fun_err_uninit);
+        return NAN;
+        }
+
+    /* A quick check. */
+    if ( b < a )
+        return error(fun_err);
+
+    /* Assign the new domain. */
+    fun->a = a;
+    fun->b = b;
+
+    /* Well that was easy... */
+    return  fun_err_ok;
+    
+	}
+
+
+/**
  * @brief Compute the maximum of a fun on its domain.
  *
  * @param fun The #fun to be maximised.

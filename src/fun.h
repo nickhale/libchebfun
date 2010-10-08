@@ -132,4 +132,4 @@ double fun_norm2 ( struct fun *fun );
 double fun_norm_inf ( struct fun *fun );
 double fun_err_norm2 ( struct fun *A , struct fun *B );
 double fun_err_norm_inf ( struct fun *A , struct fun *B );
-
+int fun_newdomain( struct fun *fun , double a , double b);
