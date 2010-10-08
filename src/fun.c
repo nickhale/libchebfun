@@ -576,6 +576,83 @@ int fun_simplify ( struct fun *fun , double tol ) {
 
     }
 
+
+/**
+ * @brief The 2-norm difference of two functions
+ *
+ * @param A The first #fun.
+ * @param B The second #fun.
+ * @return The 2-norm of their difference.
+ */
+
+double fun_err_norm2 ( struct fun *A , struct fun *B ) {
+
+    double norm;
+    struct fun C = FUN_EMPTY;
+
+    /* Check inputs. */
+    if ( A == NULL || B == NULL )
+        return error(fun_err_null);
+    if ( !( A->flags & B->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* If A == B this must be zero */
+    if ( A == B )
+        return 0.0; 
+
+    /* Subtract A and B */
+    fun_madd ( A , 1.0 , B , -1.0 , &C );  
+
+    /* Subtract A and B */
+    norm = fun_norm2 ( &C ); 
+
+    /* Clean C */
+    fun_clean( &C );
+
+    /* Sweet. */
+    return norm;
+
+    }
+
+
+/**
+ * @brief The inf-norm difference of two functions
+ *
+ * @param A The first #fun.
+ * @param B The second #fun.
+ * @return The inf-norm of their difference.
+ */
+
+double fun_err_norm_inf ( struct fun *A , struct fun *B ) {
+
+    double norm;
+    struct fun C = FUN_EMPTY;
+
+    /* Check inputs. */
+    if ( A == NULL || B == NULL )
+        return error(fun_err_null);
+    if ( !( A->flags & B->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* If A == B this must be zero */
+    if ( A == B )
+        return 0.0;   
+
+    /* Subtract A and B */
+    fun_madd ( A , 1.0 , B , -1.0 , &C );  
+
+    /* Subtract A and B */
+    norm = fun_norm_inf ( &C ); 
+
+    /* Clean C */
+    fun_clean( &C );
+
+    /* Sweet. */
+    return norm;
+
+    }
+
+
     
 /**
  * @brief Simplify a fun (remove trailing coefficients below tolerance).
@@ -1312,7 +1389,7 @@ double fun_integrate ( struct fun *fun ) {
 int fun_indef_integral ( struct fun *A , struct fun *B ) {
 
     int k, n, sgn;
-    double *c;
+    double *c, scl;
 
     /* Check for the usual problems... */
     if ( A == NULL || B == NULL )
@@ -1359,8 +1436,7 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
         c = A->coeffs.real;
         
         }
-            
-            
+
     /* Compute the coefficients of the integral. */
     if ( n == 1 ) {
         B->coeffs.real[1] = c[0];
@@ -1385,7 +1461,13 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
         B->coeffs.real[0] += sgn * B->coeffs.real[k];
         sgn = -sgn;
         }
-        
+
+    /* Scaling for non-standard intervals */
+    scl = 0.5 * (A->b - A->a);
+    if ( scl != 1.0 )
+        for ( k = 0 ; k < n+1 ; k++ )
+            B->coeffs.real[k] *= scl;
+
     /* Compute the new values. */
     if ( util_chebpolyval( B->coeffs.real , B->n , B->vals.real ) < 0 )
         return error(fun_err_util);
@@ -1397,25 +1479,7 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
     return fun_err_ok;
         
     }
-     
-/**
-function g = cumsum_unit_interval(g)
 
-
-c = [0;0;chebpoly(g)];                        % obtain Cheb coeffs {c_r}
-cout = zeros(n-1,1);                          % initialize vector {C_r}
-cout(1:n-1) = (c(3:end-1)-c(1:end-3))./...    % compute C_(n+1) ... C_2
-    (2*(n:-1:2)');
-cout(n,1) = c(end) - c(end-2)/2;              % compute C_1
-v = ones(1,n); v(end-1:-2:1) = -1;
-cout(n+1,1) = v*cout;                         % compute C_0
-g.vals = chebpolyval(cout);
-g.scl.v = max(g.scl.v, norm(g.vals,inf));
-g.n = n+1;
-
-end
-
-**/
      
 /**
  * @brief Scale the given fun by a scalar value.
@@ -1501,6 +1565,26 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
 int fun_add ( struct fun *A , struct fun *B , struct fun *C ) {
 
     return fun_madd( A , 1.0 , B , 1.0 , C );
+
+    }
+
+
+/**
+ * @brief Subtract two funs.
+ * 
+ * @param A Pointer to a #fun.
+ * @param B Pointer to a #fun.
+ * @param C Pointer to a #fun in which to store the result of
+ *      @c A - @c B. @c C can be equal to @c A or @c B. In any
+ *      case, @c C should be either initialized or clean (see #fun_clean).
+ * @return #fun_err_ok or < 0 if an error occurs.
+ *
+ * This function is just a wrapper for #fun_madd.
+ */
+ 
+int fun_sub ( struct fun *A , struct fun *B , struct fun *C ) {
+
+    return fun_madd( A , 1.0 , B , -1.0 , C );
 
     }
 

@@ -509,8 +509,11 @@ int chebtest_max_min ( char **name ) {
  
 int chebtest_cumsumcos100x ( char **name ) {
 
-    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY, err = FUN_EMPTY ;
-    double norm;
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY ;
+    double norm, tol, eps;
+
+    /* tolerance for tests */
+    eps = chebopts_opts->eps / DBL_EPSILON;
     
     /* The function for which to create a chebfun. */
     int thefun ( const double *x , unsigned int N , double *v , void *data ) {
@@ -524,7 +527,7 @@ int chebtest_cumsumcos100x ( char **name ) {
     int thefun_prime ( const double *x , unsigned int N , double *v , void *data ) {
         int k;
         for ( k = 0 ; k < N ; k++ )
-            v[k] = sin( 100.0 * x[k] ) / 100.0;
+            v[k] = ( sin( 100.0 * x[k] ) - sin(1000.0) )/ 100.0;
         return 0;
         }
         
@@ -540,10 +543,11 @@ int chebtest_cumsumcos100x ( char **name ) {
     /* Compute the indefinite integral. */
     if ( fun_indef_integral( &f1 , &f3 ) < 0 )
         return FAIL;
-        
+
     /* Do the first test. */
-    fun_madd ( &f3 , 1.0 , &f2 , -1.0 , &err );
-    if ( ( norm = fun_norm_inf( &err ) ) < 0 )
+    tol = 1e-13*f1.scale*eps;
+    norm = fun_err_norm_inf( &f3 , &f2 );
+    if ( ( norm  < 0 ) | ( norm > tol ) )
         return FAIL;
 
     /* Compute the indefinite integral into f1. */
@@ -551,12 +555,12 @@ int chebtest_cumsumcos100x ( char **name ) {
         return FAIL;
         
     /* Do the second test. */
-    fun_madd ( &f1 , 1.0 , &f2 , -1.0 , &err );
-    if ( ( norm = fun_norm_inf( &err ) ) < 0 )
+    norm = fun_err_norm_inf( &f1 , &f2 );
+    if ( ( norm  < 0 ) | ( norm > tol ) )
         return FAIL;
 
     /* If nothing went wrong, just return 0. */
-    fun_clean(&f1); fun_clean(&f2); fun_clean(&f3); fun_clean(&err);
+    fun_clean(&f1); fun_clean(&f2); fun_clean(&f3);
     return PASS;
         
     }

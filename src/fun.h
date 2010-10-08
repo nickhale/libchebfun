@@ -104,6 +104,7 @@ double fun_eval_clenshaw ( struct fun *fun , double x );
 int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , double *out );
 int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , struct fun *C );
 int fun_add ( struct fun *a , struct fun *b , struct fun *c );
+int fun_sub ( struct fun *A , struct fun *B , struct fun *C );
 int fun_scale ( struct fun *A , double w , struct fun *B );
 double fun_integrate ( struct fun *fun );
 int fun_indef_integral ( struct fun *A , struct fun *B );
@@ -115,7 +116,6 @@ int fun_create_coeffs( struct fun *fun , double *coeffs , double a , double b , 
 int fun_create_nonadapt ( struct fun *fun , double (*fx)( double x , void * ) , double a , double b , unsigned int N , void *data );
 int fun_rescale ( struct fun *fun );
 void _fun_rescale ( struct fun *fun );
-double fun_norm2 ( struct fun *fun );
 int fun_diff ( struct fun *f, struct fun *fp );
 int fun_display ( struct fun *fun , FILE *out );
 int fun_simplify ( struct fun *fun, double tol );
@@ -127,5 +127,9 @@ int fun_copy ( struct fun *fun , struct fun *fun2 );
 int fun_max ( struct fun *fun , double *maxy , double *maxx );
 int fun_min ( struct fun *fun , double *miny , double *minx );
 int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy , double *maxx );
-double fun_norm_inf ( struct fun *fun );
 int fun_prolong( struct fun *A , unsigned int N , struct fun *B);
+double fun_norm2 ( struct fun *fun );
+double fun_norm_inf ( struct fun *fun );
+double fun_err_norm2 ( struct fun *A , struct fun *B );
+double fun_err_norm_inf ( struct fun *A , struct fun *B );
+
