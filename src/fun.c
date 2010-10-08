@@ -844,7 +844,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         fun_clean( &funL );
         fun_clean( &funR ); 
         
-    }
+        }
         
     /* To the pub!. */
     return nroots;
@@ -945,6 +945,8 @@ double fun_norm2 ( struct fun *fun ) {
  * @brief Display a load of bumf about a fun. (Mostly for testing).
  *
  * @param fun The #fun to be displayed.
+ * @param out A pointer to a @c FILE to which output will be directed.
+ *      If in doubt, just use @c stdout.
  *
  * @return #fun_err_ok or < 0 if an error occured.
  */
