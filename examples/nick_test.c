@@ -72,26 +72,26 @@ int main ( int argc , char *argv[] ) {
     int k, res, nroots;
     
     /* Initialize the fun f1 (vector real). */
-    fun_create_vec( &f1 , &myfun , -1.0 , 1.0 , NULL );
+    fun_create_vec( &f1 , &myfun , 0 , 1.0 , NULL );
 
-    fun_create_vec( &f2 , &myfun , -1.0 , 1.0 , NULL );
+    fun_create_vec( &f2 , &myfun , 0 , 1.0 , NULL );
 
 	/* Test cumsum.
     fun_display( &f1 , stdout );
     fun_indef_integral( &f1, &f2 );
     fun_display( &f2 , stdout ); */
 
+    /* Test isequal 
     printf("error = %e\n", fun_err_norm_inf( &f1, &f2 ));
+    printf("equal = %i\n", fun_isequal( &f1, &f2 )); */
 
-    printf("equal = %i\n", fun_isequal( &f1, &f2 ));
-
+    /* Test plotting */
+    fun_plot( &f1 ); 
 
 	/* Clean */
 	fun_clean( &f1 );
     fun_clean( &f2 );
 	
-
-
     /* All is well. */
     return 0;
 

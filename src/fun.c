@@ -57,6 +57,75 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
 
 
 /**
+ * @brief Plot a #fun with gnuplot.
+ *
+ * @param f1 The input #fun.
+ *
+ * @return #fun_err_ok or < 0 on error (see #fun_err).
+ */
+ 
+int fun_plot ( struct fun *f1 ) {
+
+    int k, npts = 1000;
+    double tk, xk, vk, scl1, scl2;
+    FILE *lines, *marks, *pipe;
+
+    /* Routine checks of sanity. */
+    if ( f1 == NULL )
+        return error(fun_err_null);
+    if ( !( f1->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* Scaling for the interval [a b] */
+    scl1 = (f1->a+f1->b) * 0.5;
+    scl2 = (f1->b-f1->a) * 0.5;
+
+    /*** LINES ***/
+    /* Open the output file. */
+    if ( ( lines = fopen( "fun_test.dump" , "w" ) ) == NULL ) {
+        printf("fun_test: unable to create fun_test.dump.\n");
+        return -1;
+        }
+    /* Get the lines */
+    for ( k = 0 ; k < npts ; k++ ) {
+        tk = (2.0 * k) / (double)(npts - 1) - 1.0;
+        xk = scl1 + scl2 * tk;
+        fprintf(lines," %.20e %.20e\n", xk , fun_eval( f1 , xk ));
+        }     
+    /* Close the output file. */
+    fclose(lines);
+
+    /*** MARKS ***/
+    /* Open the output file. */
+    if ( ( marks = fopen( "fun_test2.dump" , "w" ) ) == NULL ) {
+        printf("fun_test: unable to create fun_test2.dump.\n");
+        return -1;
+        }
+    /* Get the marks */
+    for ( k = 0 ; k < f1->n ; k++ ) {
+        vk = scl1 + scl2 * f1->points[k];
+        fprintf(marks," %.20e %.20e\n", vk , f1->vals.real[k] );
+        }
+    /* Close the output file. */
+    fclose(lines);
+
+    /* Fire-up gnuplot. */
+    if ( ( pipe = popen( "gnuplot -persist" , "w" ) ) == NULL ) {
+        printf("fun_test: unable to create a pipe to gnuplot.\n");
+        return -1;
+        }
+    
+    /* Pipe the data */
+    fprintf( pipe , "set term wxt 1\np 'fun_test.dump' u 1:2 w lines title \"f\", 'fun_test2.dump' u 1:2 w points ps 3 title \"\"\n" );
+
+    /* Close the pipe */
+    pclose(pipe);
+
+    return fun_err_ok; 
+    }
+
+
+/**
  * @brief Add a constant value to a #fun.
  *
  * @param A The input #fun.
@@ -342,12 +411,10 @@ int fun_newdomain ( struct fun *fun , double a , double b) {
 	
     /* Bad apples? */
     if ( fun == NULL ) {
-        error(fun_err_null);
-        return NAN;
+        return error(fun_err_null);
         }
     if ( !( fun->flags & fun_flag_init ) ) {
-        error(fun_err_uninit);
-        return NAN;
+        return error(fun_err_uninit);
         }
 
     /* A quick check. */
@@ -359,7 +426,7 @@ int fun_newdomain ( struct fun *fun , double a , double b) {
     fun->b = b;
 
     /* Well that was easy... */
-    return  fun_err_ok;
+    return fun_err_ok;
     
 	}
 
