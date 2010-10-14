@@ -85,10 +85,10 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     diff_max = 0.0;
     for ( k = 1 ; k < N ; k++ ) {
         temp = fabs( v[k] - v[k-1] );
-        if ( fabs( x[k] - x[k-1] ) > DBL_EPSILON )
+        if ( fabs( x[k] - x[k-1] ) > 2 * DBL_EPSILON )
             temp /= fabs( x[k] - x[k-1] );
         else
-            temp /= DBL_EPSILON;
+            temp /= 2 * DBL_EPSILON;
         if ( temp > diff_max )
             diff_max = temp;
         }
@@ -105,8 +105,21 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     /* Get the index of the last coefficient |coeffs[k]| < tail_max. */
     for ( k = N-1 ; k >= 0 && fabs(coeffs[k]) < tail_max ; k-- );
     
+    /* Is the function actually just zero? */
+    if ( k < 0 ) {
+    
+        /* Set N to 1. */
+        N = 1;
+        
+        /* Set the coefficients and values. */
+        coeffs[0] = 0.0;
+        v[0] = 0.0;
+        x[0] = 0.0;
+    
+        }
+    
     /* Is the tail long enough? */
-    if ( N - k > tail ) {
+    else if ( N - k > tail ) {
     
         /* For now, just use k+1... */
         /* TODO: actually implement the strategy from simplify.m! */
@@ -149,27 +162,40 @@ int util_chebpolyval ( double *coeffs , unsigned int N , double *v ) {
     if ( coeffs == NULL || v == NULL )
         return error(util_err_null);
         
-    /* Mind the edges... */
-    coeffs[0] *= 2.0;
-    coeffs[N-1] *= 2.0;
+    /* Catch the trivial case of N=1. */
+    if ( N == 1 ) {
+    
+        /* Set v. */
+        v[0] = coeffs[0];
+        
+        }
+        
+    /* Case for N > 1. */
+    else {
+        
+        /* Mind the edges... */
+        coeffs[0] *= 2.0;
+        coeffs[N-1] *= 2.0;
 
-    /* Note, as of here, that fftw's routines do not produce error codes! */
-    /* Create a plan for the DCT. */
-    plan = fftw_plan_r2r_1d( N , coeffs , v , FFTW_REDFT00 , FFTW_ESTIMATE );
-    
-    /* Execute our devious plan. */
-    fftw_execute(plan);
-    
-    /* Destroy the old plan (Mwahaha!). */
-    fftw_destroy_plan(plan);
-    
-    /* Mind the edges... */
-    coeffs[0] *= 0.5;
-    coeffs[N-1] *= 0.5;
+        /* Note, as of here, that fftw's routines do not produce error codes! */
+        /* Create a plan for the DCT. */
+        plan = fftw_plan_r2r_1d( N , coeffs , v , FFTW_REDFT00 , FFTW_ESTIMATE );
 
-    /* Scale the function values back. */
-    for ( k = 0 ; k < N ; k++ )
-        v[k] *= 0.5;
+        /* Execute our devious plan. */
+        fftw_execute(plan);
+
+        /* Destroy the old plan (Mwahaha!). */
+        fftw_destroy_plan(plan);
+
+        /* Mind the edges... */
+        coeffs[0] *= 0.5;
+        coeffs[N-1] *= 0.5;
+
+        /* Scale the function values back. */
+        for ( k = 0 ; k < N ; k++ )
+            v[k] *= 0.5;
+        
+        }
     
     /* If all went well... */
     return util_err_ok;
@@ -363,23 +389,35 @@ int util_chebpoly ( double *v , unsigned int N , double *c ) {
     if ( v == NULL || c == NULL )
         return error(util_err_null);
         
-    /* Note, as of here, that fftw's routines do not produce error codes! */
-    /* Create a plan for the DCT. */
-    plan = fftw_plan_r2r_1d( N , v , c , FFTW_REDFT00 , FFTW_ESTIMATE );
+    /* Catch the trivial case of N=1. */
+    if ( N == 1 ) {
     
-    /* Execute our devious plan. */
-    fftw_execute(plan);
-    
-    /* Destroy the old plan (Mwahaha!). */
-    fftw_destroy_plan(plan);
-    
-    /* Mind the edges. */
-    c[0] *= 0.5;
-    c[N-1] *= 0.5;
-    
-    /* Scale the coefficients. */
-    for ( k = 0 ; k < N ; k++ )
-        c[k] *= w;
+        c[0] = v[0];
+        
+        }
+        
+    /* Otherwise, call fftw. */
+    else {
+        
+        /* Note, as of here, that fftw's routines do not produce error codes! */
+        /* Create a plan for the DCT. */
+        plan = fftw_plan_r2r_1d( N , v , c , FFTW_REDFT00 , FFTW_ESTIMATE );
+
+        /* Execute our devious plan. */
+        fftw_execute(plan);
+
+        /* Destroy the old plan (Mwahaha!). */
+        fftw_destroy_plan(plan);
+
+        /* Mind the edges. */
+        c[0] *= 0.5;
+        c[N-1] *= 0.5;
+
+        /* Scale the coefficients. */
+        for ( k = 0 ; k < N ; k++ )
+            c[k] *= w;
+            
+        }
     
     /* If all went well... */
     return util_err_ok;

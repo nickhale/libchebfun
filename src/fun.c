@@ -884,9 +884,22 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     /* Check inputs. */
     if ( fun == NULL )
         return error(fun_err_null);
+        
+    /* Trivial case if fun is constant. */
+    if ( fun->n == 1 ) {
+    
+        /* There are no zeros, unless c[0]==0. */
+        if ( fun->coeffs.real[0] == 0.0 ) {
+            roots[0] = 0.5 * ( fun->a + fun->b );
+            return 1;
+            }
+        else
+            return 0;
+    
+        }
 
-    if (fun->n < 101) {
-    /* Solve the eigenvalue problem. */
+    /* If the fun is small enough, solve the eigenvalue problem. */
+    else if ( fun->n < 101 ) {
 
         /* Remove small trailing coefficients */
         fun_rescale ( fun );
