@@ -567,17 +567,87 @@ int chebtest_cumsumcos100x ( char **name ) {
 
 
 /**
+ * @brief Re-implementation of the chebtest polytest, impemented for #fun instead
+ * of #chebfun.
+ */
+ 
+int chebtest_polytest ( char **name ) {
+
+    struct fun f = FUN_EMPTY;
+    double *p;
+    int k;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = 1.0 + x[k]*(2.0 + x[k]*(3.0 + 4.0*x[k]));
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "polytest";
+        
+    /* Create the fun. */
+    if ( fun_create_vec( &f , &thefun , 2.0 , 10.0 , NULL ) < 0 )
+        return FAIL;
+
+    /* Create some space for the coefficients. */
+    if ( ( p = (double *)alloca( sizeof(double) * f.n ) ) == NULL )
+        return FAIL;
+
+    /* Do the first test. */
+    if ( fun_poly( &f, p) < 0 )
+        return FAIL;
+    fun_clean(&f);
+
+    for ( k = 0 ; k < f.n ; k++ ) 
+        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e5 )
+            return FAIL;
+
+    /* The 2nd function for which to create a chebfun. */
+    int thefun2 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = 1.0 + x[k]*2.0;
+        return 0;
+        }
+    /* Create the fun. */
+    if ( fun_create_vec( &f , &thefun , 2.0 , 10.0 , NULL ) < 0 )
+        return FAIL;
+
+    /* Create some space for the coefficients. */
+    if ( ( p = (double *)alloca( sizeof(double) * f.n ) ) == NULL )
+        return FAIL;
+
+    /* Do the first test. */
+    if ( fun_poly( &f, p) < 0 )
+        return FAIL;
+    fun_clean(&f);
+
+    for ( k = 0 ; k < f.n ; k++ ) 
+        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e5 )
+            return FAIL;
+        
+    /* If nothing went wrong, just return 0. */
+    return PASS;
+        
+    }
+
+
+
+/**
  * @brief Runs through a list of tests and reports errors.
  */
  
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 9;
-    int (*tests[9])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 10;
+    int (*tests[10])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
-        &chebtest_restrict , &chebtest_cumsumcos100x , &chebtest_simplify ,
-        &chebtest_roots };
+        &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
+        &chebtest_roots , &chebtest_cumsumcos100x};
     
     int k, res;
     char *name = NULL;

@@ -55,6 +55,133 @@ const char *fun_err_msg[] = {
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
 
+/**
+ * @brief Compute the polynomial coefficients of a #fun.
+ *
+ * @param f1 The input #fun.
+ * @param out A vector to contain the coefficients.
+ *
+ * @return #fun_err_ok or < 0 on error (see #fun_err).
+ */
+
+int fun_poly ( struct fun *f1 , double *out ) {
+
+    int j, k, l, n, lwr;
+    int *tn, *tn1, *tn2, *tmp;
+    int fac_k, fac_kmj, fac_j;
+    double alpha, beta, binom, tmpout;
+
+    /* Routine checks of sanity. */
+    if ( f1 == NULL )
+        return error(fun_err_null);
+    if ( !( f1->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    n = f1->n;
+
+    if ( n == 1 )  /* Trivial constant case */
+        out[0] = f1->coeffs.real[0];
+
+    else if ( n == 2 ) {  /* Trivial linear case */
+        out[0] = f1->coeffs.real[0];
+        out[1] = f1->coeffs.real[1];
+        if ( f1->a != -1.0 || f1->b != 1.0 ) {
+            /* Constants for rescaling */
+            alpha = 2.0 / (f1->b - f1->a);
+            beta = - (f1->b + f1->a) / (f1->b - f1->a);
+            out[0] = out[0]+beta*out[1];
+            out[1] *= alpha;
+            }
+        } /* End trivial linear case */
+
+    else {  /* General case */
+        
+        /* Allocate some work memory */
+        if ( ( ( tn = (int *)alloca( sizeof(int) * n ) ) == NULL ) ||
+             ( ( tn1 = (int *)alloca( sizeof(int) * n ) ) == NULL ) ||
+             ( ( tn2 = (int *)alloca( sizeof(int) * n ) ) == NULL ) )
+            return error(fun_err_malloc);
+        /* Align it nicely */
+        tn  = (int *)( (((size_t)tn) + 15 ) & ~15 );
+        tn1 = (int *)( (((size_t)tn1) + 15 ) & ~15 );
+        tn2 = (int *)( (((size_t)tn2) + 15 ) & ~15 );
+        /* Zero it out */
+        bzero( tn , sizeof(int) * n );
+        bzero( tn1 , sizeof(int) * n );
+        bzero( tn2 , sizeof(int) * n );
+
+        /* Initialise */
+        tn1[0] = 0;   tn1[1] = 1;  tn2[0] = 1;
+        out[1] = f1->coeffs.real[0];
+        out[0] = f1->coeffs.real[1];
+
+        /* The unit interval case */
+        lwr = 2; 
+        for ( j = 2 ; j < n ; j++ ) {
+            if ( lwr <= j+2 )
+                lwr = j-2;
+
+            /* Update the matrix row */
+            tn[0] = -tn2[0];
+            for ( k = 1 ; k < j+1 ; k++ )
+                tn[k] = 2*tn1[k-1]-tn2[k];
+
+            /* Update the coefficients */
+            for ( k = j ; k > 0 ; k-- )
+                out[k] = f1->coeffs.real[j]*(double)tn[j-k] + out[k-1];
+            out[0] = f1->coeffs.real[j]*tn[j];
+
+            /* Juggle memory for storage */
+            tmp = tn2;  tn2 = tn1;  tn1 = tn;  tn = tmp;
+
+            }
+
+        /* Rescale for arbitrary intervals */
+        if ( f1->a != -1.0 || f1->b != 1.0 ) {
+            /* Constants for rescaling */
+            alpha = 2.0 / (f1->b - f1->a);
+            beta = - (f1->b + f1->a) / (f1->b - f1->a);
+            
+            for ( j = 0 ; j < n ; j++ ) {
+                /* Compute binomial coefficients */
+                fac_j = 1;
+                for ( l = 2 ; l <= j ; l++ )
+                    fac_j *= l;
+                for ( k = j ; k < n ; k++ ) {
+                    if ( k == j ) {
+                        fac_k = 1.0;
+                        for ( l = 2 ; l <= k ; l++ )
+                            fac_k *= l;
+                        }
+                    else
+                        fac_k *= k;
+                    fac_kmj = 1;
+                    for ( l = 2 ; l <= k-j ; l++ )
+                        fac_kmj *= l;
+                    binom = (double)fac_k/(double)(fac_kmj*fac_j);
+    
+                    /* Apply the update */
+                    if ( k == j )
+                        out[n-1-j] *= binom*pow(alpha,j);
+                    else
+                        out[n-1-j] += out[n-1-k]*binom*pow(beta,k-j)*pow(alpha,j);
+                    }
+                }
+            } /* End rescale for arbitrary intervals */
+
+        /* Reverse the ordering */
+        for ( k = 0 ; k < (n - n % 2) / 2  ; k++ ) {
+            tmpout = out[k];
+            out[k] = out[n-1-k];
+            out[n-1-k] = tmpout;
+            }
+        
+        }/* End general case */
+
+    /* Sweet. */
+    return fun_err_ok; 
+}
+
 
 /**
  * @brief Plot a #fun with gnuplot.
@@ -107,7 +234,7 @@ int fun_plot ( struct fun *f1 ) {
         fprintf(marks," %.20e %.20e\n", vk , f1->vals.real[k] );
         }
     /* Close the output file. */
-    fclose(lines);
+    fclose(marks);
 
     /* Fire-up gnuplot. */
     if ( ( pipe = popen( "gnuplot -persist" , "w" ) ) == NULL ) {
@@ -874,7 +1001,7 @@ int fun_roots( struct fun *fun , double *roots ) {
  
 int fun_roots_unit ( struct fun *fun , double *roots ) {
 
-    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol, a, b;
+    double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol, a, b, tmp;
     unsigned int N, nrootsL, nrootsR, nroots = 0;
     int j, k;
 	char job = 'E', compz = 'N';
@@ -885,21 +1012,13 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     if ( fun == NULL )
         return error(fun_err_null);
         
-    /* Trivial case if fun is constant. */
-    if ( fun->n == 1 ) {
-    
-        /* There are no zeros, unless c[0]==0. */
-        if ( fun->coeffs.real[0] == 0.0 ) {
-            roots[0] = 0.5 * ( fun->a + fun->b );
-            return 1;
-            }
-        else
-            return 0;
-    
-        }
-
+    /* Deal with this stupid case. */
+    if ( fun->n == 0 ) 
+        return 0;
     /* If the fun is small enough, solve the eigenvalue problem. */
     else if ( fun->n < 101 ) {
+        /* Set the tolerance for roots being within the interval */
+        tol = 100.0 * (fun->b - fun->a) * chebopts_opts->eps;
 
         /* Remove small trailing coefficients */
         fun_rescale ( fun );
@@ -908,6 +1027,27 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         	while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
            		N--;
         cN = -0.5 / fun->coeffs.real[N];
+
+        /* Trivial case if fun is constant. */
+        if ( N == 0 ) {
+            /* There are no zeros, unless c[0]==0. */
+            if ( fun->coeffs.real[0] == 0.0 ) {
+                roots[0] = 0.5 * ( fun->a + fun->b );
+                return 1;
+                }
+            else
+                return 0;
+            }
+        /* Trivial linear case. */
+        else if ( N == 1 ) {
+            tmp = -fun->coeffs.real[0] / fun->coeffs.real[1] * 0.5 * ( fun->a + fun->b );
+            if ( tmp < -1.0 - tol || tmp > 1.0 + tol) {
+                roots[0] = tmp;
+                return 1;
+                }
+            else
+                return 0;
+            }
             
         /* Initialize the vector A.
            Allocation is done on the stack, so we don't need to worry about
@@ -930,20 +1070,30 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         ri = (double *)( (((size_t)ri) + 15 ) & ~15 );
         work = (double *)( (((size_t)work) + 15 ) & ~15 );
    
-        /* Assign the coefficients to the first row */
-        for (j = 0 ; j < N ; j++)
-            A[N*(N-1-j)] = cN * fun->coeffs.real[j];
-        A[N] += 0.5;
-    
-        /* Assign the super- and sub-diagonal */
-        A[1] = 0.5;
-        A[N+2] = 0.5;
-        for (j = 2*N+1 ; j < N*(N-1) ; j += N+1) {
-            A[j] = 0.5;
-            A[j+2] = 0.5;
+        /* Construct the colleague matrix. */
+        /* Do N = 2 case by hand. */
+        if ( N == 2 ) { 
+            A[0] = fun->coeffs.real[1];
+            A[1] = fun->coeffs.real[0];
+            A[2] = 1.0;
             }
-		A[N*(N-1)-1] = 1.0;
-        A[N*N-2] = 0.5;
+        /* General case. */ 
+        else { 
+            /* Assign the coefficients to the first row */
+            for (j = 0 ; j < N ; j++)
+                A[N*(N-1-j)] = cN * fun->coeffs.real[j];
+            A[N] += 0.5;
+        
+            /* Assign the super- and sub-diagonal */
+            A[1] = 0.5;
+            A[N+2] = 0.5;
+            for (j = 2*N+1 ; j < N*(N-1) ; j += N+1) {
+                A[j] = 0.5;
+                A[j+2] = 0.5;
+                }
+            A[N*(N-1)-1] = 1.0;
+            A[N*N-2] = 0.5;
+            }
 
         /* Call to LAPACK to solve eigenvalue problem. */
 		ilo = 1; ihi = N; ldh = N; ldz = 1; lwork = N;
@@ -952,8 +1102,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 			return error(fun_err_lapack);
 
 // THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
-		tol = 100.0 * (fun->b - fun->a) * chebopts_opts->eps;
-        
+
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
 			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol)
@@ -2342,7 +2491,7 @@ int fun_create_nonadapt ( struct fun *fun , double (*fx)( double x , void * ) , 
 
 	/* Evaluate the function */
 	for ( j = 0 ; j < N ; j++ )
-    	fun->vals.real[j] = (*fx)( b05 * (fun->points[j] + 1.0) + a05 * (1.0 - fun->points[j]) , data );
+	    fun->vals.real[j] = (*fx)( b05 * (fun->points[j] + 1.0) + a05 * (1.0 - fun->points[j]) , data );
 
     /* Compute the coeffs from the values. */
     if ( util_chebpoly( fun->vals.real , N , fun->coeffs.real ) < 0 )
