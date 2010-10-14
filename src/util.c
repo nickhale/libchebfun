@@ -85,14 +85,14 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
     diff_max = 0.0;
     for ( k = 1 ; k < N ; k++ ) {
         temp = fabs( v[k] - v[k-1] );
-        if ( fabs( x[k] - x[k-1] ) > hscale * DBL_EPSILON )
+        if ( fabs( x[k] - x[k-1] ) > DBL_EPSILON )
             temp /= fabs( x[k] - x[k-1] );
         else
-            temp /= hscale * DBL_EPSILON;
+            temp /= DBL_EPSILON;
         if ( temp > diff_max )
             diff_max = temp;
         }
-    diff_max *= ( hscale / vscale );
+    diff_max /= vscale;
     tail_max = pow( tail , 2.0/3.0 );
     if ( tail_max < diff_max )
         tail_max = diff_max;
