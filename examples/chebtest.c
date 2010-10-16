@@ -633,7 +633,144 @@ int chebtest_polytest ( char **name ) {
     return PASS;
         
     }
+    
+    /**
+ * @brief Re-implementation of the chebtest composetest, impemented for #fun instead
+ * of #chebfun.
+ *
+ * Note, this isn't quite composetest, which checks the composition of two funs. Here
+ * we simply check for composition of a chebfun with another function.
+ */
+ 
+int chebtest_composetest ( char **name ) {
 
+    struct fun f = FUN_EMPTY, g = FUN_EMPTY;
+    double norm, tol;
+    
+    /* tolerance for tests */
+    tol = chebopts_opts->eps * 10.0;
+    
+    /* The function for which to create a chebfun. */
+    int x1 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = x[k];
+        return 0;
+        }
+        
+    int x2 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = x[k]*x[k];
+        return 0;
+        }        
+        
+    int x4 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        double x2;
+        for ( k = 0 ; k < N ; k++ ) {
+            x2 = x[k]*x[k];
+            v[k] = x2*x2;
+            }
+        return 0;
+        }     
+        
+    int sinx ( const double *x , unsigned int N , double *v ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin(x[k]);
+        return 0;
+        } 
+        
+    int sinx1 ( const double *x , unsigned int N , double *v , void *data) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin(x[k]);
+        return 0;
+        }          
+        
+    int sinx2 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin(x[k]*x[k]);
+        return 0;
+        }    
+        
+    int sinx4 ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        double x2;
+        for ( k = 0 ; k < N ; k++ ) {
+            x2 = x[k]*x[k];
+            v[k] = sin(x2*x2);
+            }
+        return 0;
+        }        
+        
+    /* Set the function name. */
+    *name = "composetest";
+        
+    /* Do the first test. */
+    /* Create the fun of x. */
+    if ( fun_create_vec( &f , &x1 , 0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+    /* Compose f with sinx. */
+    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+        return FAIL;
+    /* Compute compostition manually. */
+    if ( fun_create_vec( &g , &sinx1 , 0.0 , 1.0 , NULL ) < 0 )
+        return FAIL;        
+    /* These should be the same */
+    norm = fun_err_norm_inf( &f , &g );
+    if ( isnan( norm ) )
+        return FAIL;
+    if ( norm > tol )
+        return FAIL;
+    fun_clean(&f);
+    fun_clean(&g);
+    
+    /* Do the second test. */
+    /* Create the fun of x^2. */
+    if ( fun_create_vec( &f , &x2 , 0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+    /* Compose f with sinx. */
+    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+        return FAIL;
+    /* Compute compostition manually. */
+    if ( fun_create_vec( &g , &sinx2 , 0.0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+    /* These should be the same */
+    norm = fun_err_norm_inf( &f , &g );
+    if ( isnan( norm ) )
+        return FAIL;
+    if ( norm > tol )
+        return FAIL;
+    fun_clean(&f);
+    fun_clean(&g);
+    
+    /* Do the third test. */
+    /* Create the fun of x^4. */
+    if ( fun_create_vec( &f , &x4 , 0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+    /* Compose f with sinx. */
+    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+        return FAIL;
+    /* Compute compostition manually. */
+    if ( fun_create_vec( &g , &sinx4 , 0.0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+    /* These should be the same */
+    norm = fun_err_norm_inf( &f , &g );
+    if ( isnan( norm ) )
+        return FAIL;
+    if ( norm > tol )
+        return FAIL;
+    
+    fun_clean(&f);
+    fun_clean(&g);
+    
+    /* If nothing went wrong, just return 0. */
+    return PASS;
+        
+    }
 
 
 /**
@@ -643,11 +780,11 @@ int chebtest_polytest ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 10;
-    int (*tests[10])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 11;
+    int (*tests[11])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
         &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
-        &chebtest_roots , &chebtest_cumsumcos100x};
+        &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest};
     
     int k, res;
     char *name = NULL;

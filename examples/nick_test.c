@@ -33,12 +33,12 @@
  * @brief A simple (short) vectorized function.
  */
  
-int myfun ( const double *x , unsigned int N , double *out , void *data ) {
+int myfun_vec ( const double *x , unsigned int N , double *out , void *data ) {
     
     int k;
 
     for ( k = 0 ; k < N ; k++ ) {
-        out[k] = cos( M_PI * x[k] ) + sin( M_PI * x[k] );
+        out[k] = x[k];
         }
 
     return 0;
@@ -47,15 +47,28 @@ int myfun ( const double *x , unsigned int N , double *out , void *data ) {
 
 
 /**
+ * @brief A simple (short) non-vectorized function.
+ */
+ 
+double myfun ( const double x , void *data ) {
+    
+    return cos( x ) + sin( x );
+//        out[k] = 4.0 + x[k]*(3.0 + x[k]*(2.0 + x[k]));
+
+    }
+
+
+/**
  * @brief A simple (short) vectorized function.
  */
  
-int myfun2 ( const double *x , unsigned int N , double *out , void *data ) {
+int myfun2_vec ( const double *x , unsigned int N , double *out) {
     
     int k;
 
     for ( k = 0 ; k < N ; k++ ) {
         out[k] = cos( M_PI * x[k] ) + sin( M_PI * x[k] );
+//        out[k] = 4.0 + x[k]*(3.0 + x[k]*(2.0 + x[k]));
         }
 
     return 0;
@@ -70,11 +83,12 @@ int main ( int argc , char *argv[] ) {
 
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
     int k, res, nroots;
+    double *p;
     
-    /* Initialize the fun f1 (vector real). */
-    fun_create_vec( &f1 , &myfun , 0 , 1.0 , NULL );
+    /* Initialize the fun f1 (vector real).  */
+    fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , NULL );
 
-    fun_create_vec( &f2 , &myfun , 0 , 1.0 , NULL );
+//    fun_create_vec( &f2 , &myfun , 0 , 1.0 ,  NULL );
 
 	/* Test cumsum.
     fun_display( &f1 , stdout );
@@ -85,9 +99,35 @@ int main ( int argc , char *argv[] ) {
     printf("error = %e\n", fun_err_norm_inf( &f1, &f2 ));
     printf("equal = %i\n", fun_isequal( &f1, &f2 )); */
 
-    /* Test plotting */
-    fun_plot( &f1 ); 
+    /* Test plotting
+    fun_plot( &f1 ); */ 
 
+//    fun_display( &f1 , stdout );
+//    fun_restrict( &f1, 0.9 , 1.0 , &f1 );
+    fun_display( &f1 , stdout );
+
+    /* test roots
+    p = (double *)alloca( sizeof(double) * f1.n );
+    nroots = fun_roots( &f1, p );
+    printf("nroots = %i\n",nroots);
+    for ( k = 0 ; k < nroots ; k++ )  
+        printf("%16.16e\n",p[k]); */
+        
+    /* test comp */
+    fun_comp_vec( &f1 , &myfun2_vec , &f2 );
+    fun_display( &f2 , stdout );
+    fun_plot( &f2 );
+
+    
+
+    /* Test poly
+    if ( ( p = (double *)alloca( sizeof(double) * f1.n ) ) == NULL )
+        return error(fun_err_malloc);
+    fun_poly( &f1, p); 
+    for ( k = 0 ; k < f1.n ; k++ )  
+        printf("%16.16e\n",p[k]);
+    printf("\n"); */
+    
 	/* Clean */
 	fun_clean( &f1 );
     fun_clean( &f2 );

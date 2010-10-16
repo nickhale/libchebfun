@@ -55,6 +55,132 @@ const char *fun_err_msg[] = {
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
 
+
+/**
+ * @brief Compose a #fun wth a function.
+ *
+ * @param A The input #fun.
+ * @param op The function to compose with.
+ * @param B The output fun (which maybe the same as A).
+ *
+ * @return #fun_err_ok or < 0 on error (see #fun_err).
+ *
+ * Note, fun_comp does not deal with the case of an op
+ * of two funs, i.e., op(A,B).
+ *
+ * This function takes the role of MATLAB/@fun/growfun
+ * for when there are 4 input arguments. The op(A,B)
+ * case mentioned about would be with 5 inputs.
+ *
+ * Furthernote, fun_comp does not yet allow "resampling
+ * off" (although neither does the MATLAB implementation).
+ */
+
+int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , double * ) , struct fun *B ) {
+//int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , void *data ) {
+    double *x, *v, *coeffs, scale = 0.0;
+    double a, b;
+    double m, h;
+    unsigned int N;
+    int k, N_new;
+    struct fun tmp = FUN_EMPTY;
+    
+    /* Routine checks of sanity. */
+    if ( ( A == NULL ) || ( op == NULL ) )
+        return error(fun_err_null);
+    if ( !( A->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+        
+    /* Get the domain and scalings */
+    a = A->a;
+    b = A->b;    
+    m = (a + b) * 0.5;
+    h = (b - a) * 0.5;
+        
+    /* Initialize the vectors x, v and coeffs to the maximum length.
+       Allocation is done on the stack, so we don't need to worry about
+       releasing these if the routine fails anywhere underway.
+       Note that v and coeffs are padded with 16 bytes so that they can be
+       shifted and aligned to 16-byte boundaries. */
+    if ( ( x = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) ) ) == NULL ||
+         ( v = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) + 16 ) ) == NULL ||
+         ( coeffs = (double *)alloca( sizeof(double) * (chebopts_opts->maxdegree + 1) + 16 ) ) == NULL )
+        return error(fun_err_malloc);
+
+    /* Shift v and coeffs such that they are 16-byte aligned. */
+    v = (double *)( (((size_t)v) + 15 ) & ~15 );
+    coeffs = (double *)( (((size_t)coeffs) + 15 ) & ~15 );
+    
+    /* Init the length N. */
+    N = chebopts_opts->minsamples;
+    
+    /* Main loop. */
+    while ( 1 ) {  
+
+        /* Get the N chebpts. */
+        if ( fun_prolong( A , N , &tmp ) < 0 )
+            return -1; //Error in prolong
+                
+        /* Evaluate the op. */
+        if ( (*op)( tmp.vals.real , N , v ) < 0 )
+            return error(fun_err_fx);
+
+        /* Update the scale. */
+        for ( k = 0 ; k < N ; k++ )
+            if ( fabs(v[k]) > scale )
+                scale = fabs(v[k]);
+
+        /* Compute the coeffs from the values. */
+        if ( util_chebpoly( v , N , coeffs ) < 0 )
+            return error(fun_err_util);
+
+        /* Check convergence of the coefficients. */
+        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
+            return fun_err_util;
+
+        /* TODO: Sampletest? */
+
+        /* Did this converge? */
+        if ( N_new < N ) {
+            N = N_new;
+            break;
+            }
+
+        /* No convergence, adjust N. */
+        if ( ( chebopts_opts->flags & chebopts_flag_resampling ) && 
+             ( N < 64 ) )
+            N = (int)( ( N - 1 ) * M_SQRT2 + 1 ) | 1;
+        else
+            N = 2 * N - 1;
+
+        } /* Main loop. */
+        
+    /* Allocate the data inside the fun to the correct size. */
+    if ( !( B->flags & fun_flag_init ) || B->n < N ) {
+        if ( _fun_alloc( B , N ) < 0 )
+            return error(fun_err);
+        }
+    else
+        B->n = N;
+    
+    /* Write the data to the fun. */
+    memcpy( B->vals.real , v , sizeof(double) * N );
+    memcpy( B->coeffs.real , coeffs , sizeof(double) * N );
+    /* Get the N chebpts. */
+    if ( util_chebpts( N , B->points ) < 0 )
+        return error(fun_err_util);
+    B->scale = scale;
+    B->a = a;
+    B->b = b;
+
+    /* Thanks buddy. */
+    fun_clean( &tmp );
+    
+    /* We're outta here! */
+    return fun_err_ok;
+    
+}
+
 /**
  * @brief Compute the polynomial coefficients of a #fun.
  *
@@ -996,7 +1122,9 @@ int fun_roots( struct fun *fun , double *roots ) {
  * @param roots A pointer to an array of double of length at least
  *      equal to the length of @c fun - 1. This is where the roots will be stored.
  *
- * @return The number of roots found or < 0 if an error occured.
+ * @return The number of roots found or < 0 if an error occurred.
+ *
+ * TODO : Move 1 < |roots| < 1+tol to 1.
  */
  
 int fun_roots_unit ( struct fun *fun , double *roots ) {
