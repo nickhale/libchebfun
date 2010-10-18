@@ -41,6 +41,91 @@ const char *util_err_msg[] = {
 /* Define a macro to store the errors. */
 #define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FILE__ ) )
     
+/**
+ * @brief construct the Chebyshev differentiation matrix.
+ *
+ * @param Size of the matrix.
+ *
+ * @return Pointer to the matrix (stored as a vector)..
+ */
+
+double * util_diffmat ( unsigned int N ) {
+
+    double *x, *w, *D, s, val;
+    int j, k, sgn = 1.0; 
+    
+
+    /* Trivial case */
+    if ( N == 1 ) {
+        if ( ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL )
+            return util_err_malloc;
+        D[0] = 0.0;
+        return D;
+        }
+
+    /* Allocate the memory */
+    if ( ( x = (double *)alloca( sizeof(double) * N ) ) == NULL ||
+         ( w = (double *)alloca( sizeof(double) * N ) ) == NULL ||
+         ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL )
+        return util_err_malloc;
+    D = (double *)( (((size_t)D) + 15 ) & ~15 );
+
+//    dX = (double *)malloc( sizeof(double) * N * N + 16 )
+//    dW = (double *)malloc( sizeof(double) * N * N + 16 )
+        
+    /* Get the Chebyshev points. */
+    if ( util_chebpts ( N , x ) != 0 ) {
+        error(util_err_malloc);
+        return NULL;
+        }
+
+    /* Get the weights. */
+    for ( k = 0 ; k < N ; k++ ) {
+        w[k] = sgn;
+        sgn = -sgn;
+        }
+    w[0] = 0.5*w[0];
+    w[N-1] = 0.5*w[N-1];
+
+    /* Make dX and dW. *
+    for ( j = 0 ; j < N ; j++ )
+        for ( k = 0; k < N ; k++ ) {
+            dX[k+j*N] = x[k]-x[j];
+            dW[k+j*N] = -w[k]/w[j];
+            }
+        /* Add the identity *
+        dX[j+j*N] += 1.0;
+        dW[j+j*N] -= 1.0;
+        }
+    */
+
+    /* Make D. */
+    for ( j = 0 ; j < N ; j++ ) {
+        s = 0.0;
+        for ( k = 0; k < N; k++ ) {
+            if ( k == j )
+                continue;
+            val =  w[k]/( ( x[k]-x[j] ) * w[j] );
+            D[k+j*N] = val;
+            s += val;
+            }
+        /* Negative sum trick */
+        D[j*(N+1)] = -s;
+        }
+
+    /* print
+    for ( j = 0 ; j < N ; j++ ) {
+        for ( k = 0; k < N ; k++ ) {
+            printf("%8.8e ",D[k+j*N]);
+            }
+        printf("\n");
+        }
+    /*
+
+    /* Weee! */
+    return D;
+
+    }
 
 /**
  * @brief Checks if a given interpolation is converged or not and

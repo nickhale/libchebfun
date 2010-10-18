@@ -47,3 +47,4 @@ double * util_chebpoly_alloc ( double *v , unsigned int N );
 int util_chebpolyval ( double *coeffs , unsigned int N , double *v );
 double *util_chebpolyval_alloc ( double *coeffs , unsigned int N );
 int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps );
+double * util_diffmat ( unsigned int N );
