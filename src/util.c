@@ -51,14 +51,16 @@ const char *util_err_msg[] = {
 
 double * util_diffmat ( unsigned int N ) {
 
-    double *x, *w, *D, s, val;
+    double *x, *w, *D, s, val, xj, wj;
     int j, k, sgn = 1.0; 
     
 
     /* Trivial case */
     if ( N == 1 ) {
-        if ( ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL )
-            return util_err_malloc;
+        if ( ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL ) {
+            error(util_err_malloc);
+            return NULL
+            }
         D[0] = 0.0;
         return D;
         }
@@ -66,13 +68,12 @@ double * util_diffmat ( unsigned int N ) {
     /* Allocate the memory */
     if ( ( x = (double *)alloca( sizeof(double) * N ) ) == NULL ||
          ( w = (double *)alloca( sizeof(double) * N ) ) == NULL ||
-         ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL )
-        return util_err_malloc;
+         ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL ) {
+        error(util_err_malloc);
+        return NULL
+        }
     D = (double *)( (((size_t)D) + 15 ) & ~15 );
 
-//    dX = (double *)malloc( sizeof(double) * N * N + 16 )
-//    dW = (double *)malloc( sizeof(double) * N * N + 16 )
-        
     /* Get the Chebyshev points. */
     if ( util_chebpts ( N , x ) != 0 ) {
         error(util_err_malloc);
@@ -87,25 +88,13 @@ double * util_diffmat ( unsigned int N ) {
     w[0] = 0.5*w[0];
     w[N-1] = 0.5*w[N-1];
 
-    /* Make dX and dW. *
-    for ( j = 0 ; j < N ; j++ )
-        for ( k = 0; k < N ; k++ ) {
-            dX[k+j*N] = x[k]-x[j];
-            dW[k+j*N] = -w[k]/w[j];
-            }
-        /* Add the identity *
-        dX[j+j*N] += 1.0;
-        dW[j+j*N] -= 1.0;
-        }
-    */
-
     /* Make D. */
     for ( j = 0 ; j < N ; j++ ) {
-        s = 0.0;
+        s = 0.0; wj = w[j]; xj = x[j];
         for ( k = 0; k < N; k++ ) {
             if ( k == j )
                 continue;
-            val =  w[k]/( ( x[k]-x[j] ) * w[j] );
+            val =  w[k]/( ( x[k]-xj ) * wj );
             D[k+j*N] = val;
             s += val;
             }
