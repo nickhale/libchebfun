@@ -45,6 +45,7 @@
 #define fun_err_domain                  -7
 #define fun_err_nyi                     -8
 #define fun_err_lapack                  -9
+#define fun_err_gnuplot                 -10
 
 
 /* Global, external variables. */
@@ -137,3 +138,4 @@ int fun_isequal ( struct fun *A , struct fun *B );
 int fun_plot ( struct fun *f1 );
 int fun_poly ( struct fun *f1 , double *out );
 int fun_comp_vec ( struct fun *A , int (*fx)( const double * , unsigned int , double * ) , struct fun *B );
+int fun_x ( struct fun *fun , double a , double b );

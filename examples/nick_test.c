@@ -28,49 +28,45 @@
 #include "chebopts.h"
 #include "util.h"
 #include "fun.h"
+#include "errs.h"
+
 
 /**
- * @brief A simple (short) vectorized function.
+ * @brief Do some tests.
  */
  
-int myfun_vec ( const double *x , unsigned int N , double *out , void *data ) {
-    
-    int k;
+int main ( ) {
 
-    for ( k = 0 ; k < N ; k++ ) {
-        out[k] = x[k];
+    struct fun x = FUN_EMPTY, f = FUN_EMPTY;
+    double *roots;
+    int nroots; 
+
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = x[k]*x[k]-0.5;
+        return 0;
         }
 
-    return 0;
+    // Make x.
+    fun_x( &x, -1.0 , 1.0 );
+//    fun_display( &x , stdout );
+//    fun_plot( &x );
 
-    }
+    // Compose.
+    fun_comp_vec( &x , &thefun , &f );
+//    fun_plot( &f );
+    fun_display( &f , stdout );
 
-
-/**
- * @brief A simple (short) non-vectorized function.
- */
- 
-double myfun ( const double x , void *data ) {
-    
-    return cos( x ) + sin( x );
-//        out[k] = 4.0 + x[k]*(3.0 + x[k]*(2.0 + x[k]));
-
-    }
-
-
-/**
- * @brief A simple (short) vectorized function.
- */
- 
-int myfun2_vec ( const double *x , unsigned int N , double *out) {
-    
-    int k;
-
-    for ( k = 0 ; k < N ; k++ ) {
-        out[k] = cos( M_PI * x[k] ) + sin( M_PI * x[k] );
-//        out[k] = 4.0 + x[k]*(3.0 + x[k]*(2.0 + x[k]));
-        }
-
+    // Compute roots
+    roots = (double *)alloca( sizeof(double) * f.n );
+    nroots = fun_roots( &f , roots );
+  
+	// Clean.
+	fun_clean( &x );
+	fun_clean( &f );
+	
+    // All is well.
     return 0;
 
     }
@@ -79,60 +75,99 @@ int myfun2_vec ( const double *x , unsigned int N , double *out) {
  * @brief Do some tests.
  */
  
-int main ( int argc , char *argv[] ) {
+/* ExtremeExtrema
+int main ( ) {
 
-    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
-    int k, res, nroots;
-    double *p;
-    
-    /* Initialize the fun f1 (vector real).  */
-    fun_create_vec( &f1 , &myfun_vec , -1.0 , 1.0 , NULL );
+    struct fun x = FUN_EMPTY, f = FUN_EMPTY;
 
-//    fun_create_vec( &f2 , &myfun , 0 , 1.0 ,  NULL );
+    // The function cos(x)*sin(exp(x)).
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = cos(x[k])*sin(exp(x[k]));
+        return 0;
+        }
 
-	/* Test cumsum.
-    fun_display( &f1 , stdout );
-    fun_indef_integral( &f1, &f2 );
-    fun_display( &f2 , stdout ); */
+    // Make x.
+    fun_x( &x, 0.0 , 6.0 );
+//    fun_display( &x , stdout );
+//    fun_plot( &x );
 
-    /* Test isequal 
-    printf("error = %e\n", fun_err_norm_inf( &f1, &f2 ));
-    printf("equal = %i\n", fun_isequal( &f1, &f2 )); */
+    // Compose.
+    fun_comp_vec( &x , &thefun , &f );
+//    fun_plot( &f );
 
-    /* Test plotting
-    fun_plot( &f1 ); */ 
-
-//    fun_display( &f1 , stdout );
-//    fun_restrict( &f1, 0.9 , 1.0 , &f1 );
-    fun_display( &f1 , stdout );
-
-    /* test roots
-    p = (double *)alloca( sizeof(double) * f1.n );
-    nroots = fun_roots( &f1, p );
-    printf("nroots = %i\n",nroots);
-    for ( k = 0 ; k < nroots ; k++ )  
-        printf("%16.16e\n",p[k]); */
-        
-    /* test comp */
-    fun_comp_vec( &f1 , &myfun2_vec , &f2 );
-    fun_display( &f2 , stdout );
-    fun_plot( &f2 );
-
-    
-
-    /* Test poly
-    if ( ( p = (double *)alloca( sizeof(double) * f1.n ) ) == NULL )
-        return error(fun_err_malloc);
-    fun_poly( &f1, p); 
-    for ( k = 0 ; k < f1.n ; k++ )  
-        printf("%16.16e\n",p[k]);
-    printf("\n"); */
-    
-	/* Clean */
-	fun_clean( &f1 );
-    fun_clean( &f2 );
+	// Clean.
+	fun_clean( &x );
+	fun_clean( &f );
 	
-    /* All is well. */
+    // All is well.
     return 0;
 
     }
+*/
+
+/* BesselRoots 
+int main ( ) {
+
+    struct fun x = FUN_EMPTY, f = FUN_EMPTY;
+    double *roots;
+    int nroots;
+
+    // The Bessel function.
+    int thefun ( const double *x , unsigned int N , double *v ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = j0(x[k]);
+        return 0;
+        }
+
+    // Make x.
+    fun_x( &x, 0.0 , 100.0 );
+//    fun_display( &x , stdout );
+    if ( fun_plot( &x ) < 0 )
+        errs_dump( stdout );
+    
+
+    // Compose.
+    fun_comp_vec( &x , &thefun , &f );
+    if ( fun_plot( &f ) < 0 )
+        errs_dump( stdout );
+
+    // Find the roots.
+    nroots = fun_roots( &f , roots );
+    printf("The are %i roots of the Bessel function in [%9.9e %9.9e]\n",nroots,f.a,f.b);
+//    for ( k = 0; k < nroots ; k++ )
+//        printf( "%16.16e\n",roots[k]);
+
+	// Clean.
+	fun_clean( &x );
+	fun_clean( &f );
+
+    // Make x again.
+    fun_x( &x, 1000000.0 , 1001000.0 );
+//    fun_display( &x , stdout );
+//    fun_plot( &x );
+
+    // Compose.
+    if ( fun_comp_vec( &x , &thefun , &f ) < 0 )
+        errs_dump( stdout );
+//    fun_display( &f , stdout );
+//    if ( fun_plot( &f ) < 0 )
+//        errs_dump( stdout );
+//    printf("The length of f is %i\n",f.n);
+    
+    // Find the roots.
+    nroots = fun_roots( &f , roots );
+    printf("The are %i roots of the Bessel function in [%9.9e %9.9e]\n",nroots,f.a,f.b);
+
+	// Clean.
+	fun_clean( &x );
+	fun_clean( &f );
+	
+    // All is well.
+    return 0;
+
+    }
+*/
+

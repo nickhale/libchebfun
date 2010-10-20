@@ -44,7 +44,7 @@ const char *util_err_msg[] = {
 /**
  * @brief construct the Chebyshev differentiation matrix.
  *
- * @param Size of the matrix.
+ * @param N Size of the matrix.
  *
  * @return Pointer to the matrix (stored as a vector)..
  */
@@ -59,7 +59,7 @@ double * util_diffmat ( unsigned int N ) {
     if ( N == 1 ) {
         if ( ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL ) {
             error(util_err_malloc);
-            return NULL
+            return NULL;
             }
         D[0] = 0.0;
         return D;
@@ -70,7 +70,7 @@ double * util_diffmat ( unsigned int N ) {
          ( w = (double *)alloca( sizeof(double) * N ) ) == NULL ||
          ( D = (double *)malloc( sizeof(double) * (N * N) + 16 ) ) == NULL ) {
         error(util_err_malloc);
-        return NULL
+        return NULL;
         }
     D = (double *)( (((size_t)D) + 15 ) & ~15 );
 

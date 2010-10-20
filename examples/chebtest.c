@@ -770,6 +770,83 @@ int chebtest_composetest ( char **name ) {
     /* If nothing went wrong, just return 0. */
     return PASS;
         
+    }    
+
+
+/**
+ * @brief Re-implementation of the chebtest rootspol, impemented for #fun instead
+ * of #chebfun.
+ */
+ 
+int chebtest_rootspol ( char **name ) {
+
+    struct fun p = FUN_EMPTY;
+    double *r, *c, tol, err, pr;
+    int k, nroots;
+
+    tol = 1e-13 * chebopts_opts->eps / DBL_EPSILON;;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = (x[k]-0.1)*(x[k]+0.9)*x[k]*(x[k]-0.9) + 1e-14*pow(x[k],5);
+        return 0;
+        }
+        
+    /* Set the function name. */
+    *name = "rootspol";
+
+    /* Create the fun. */
+    if ( fun_create_vec( &p , &thefun , -1.0 , 1.0 , NULL ) < 0 )
+        return FAIL;
+        
+    /* Do the first test. */
+    r = (double *)alloca( sizeof(double) * p.n );
+    nroots = fun_roots( &p, r );
+    if ( nroots < 0 )
+        return FAIL;
+    if ( nroots != 4 )
+        return FAIL;
+
+    /* Evaluate the function at the 'roots' */
+    err = 0.0;
+    for ( k = 0 ; k < nroots ; k++ ) {
+        pr = fabs(fun_eval( &p , r[k] ));
+        if ( err < pr )
+            err = pr;
+        }
+
+    /* Check the error */
+    if ( err > tol )
+        return FAIL;
+    
+    /* Clean up */
+    fun_clean( &p );
+
+    /* Do the second test. */
+    if ( ( c = (double *)alloca( sizeof(double) * 6 ) ) == NULL )
+        return FAIL; 
+    bzero( c , sizeof(double) * 6 );
+    c[1] = 1.0;
+
+    /* Construct the fun */
+    if ( fun_create_coeffs ( &p , c , -1.0 , 1.0 , 6 ) < 0 )
+        return FAIL;
+
+    r = (double *)alloca( sizeof(double) * p.n );
+    nroots = fun_roots( &p, r );
+    if ( nroots < 0 )
+        return FAIL;
+    if ( nroots != 1 )
+        return FAIL;
+    if ( r[0] != 0.0 )
+        return FAIL;
+
+    /* If nothing went wrong, just return 0. */
+    fun_clean( &p );
+    return PASS;
+        
     }
 
 
@@ -780,11 +857,11 @@ int chebtest_composetest ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 11;
-    int (*tests[11])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 12;
+    int (*tests[12])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
         &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
-        &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest};
+        &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest, &chebtest_rootspol};
     
     int k, res;
     char *name = NULL;

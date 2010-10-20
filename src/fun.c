@@ -45,8 +45,9 @@ const char *fun_err_msg[] = {
     "Something went wrong in a call to a user-supplied function.",
     "The fun has not been initialized.",
     "The funs do not span the same domain or operation requested outside of domain.",
-    "Requested operation is not yet implemented." 
-    "A call to LAPACK ended in a calamity." };
+    "Requested operation is not yet implemented.",
+    "A call to LAPACK ended in a calamity.",
+    "A call to GNUPLOT wasn't very cool." };
     
 /* Define a macro to store the errors. */
 #define error( id )     ( fun_err = errs_register( id , fun_err_msg[-id] , __LINE__ , __FILE__ ) )
@@ -55,6 +56,49 @@ const char *fun_err_msg[] = {
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
 
+/**
+ * @brief Constructs a #fun of x on the interval a b.
+ *
+ * @param fun The #fun structure to be initialized.
+ * @param a
+ * @param b The left and right boundaries of the interval.
+ * @return #fun_err_ok or < 0 on error. 
+ */
+
+int fun_x ( struct fun *fun , double a , double b ) {
+
+    /* Check inputs. */
+    if ( fun == NULL )
+        return error(fun_err_null);
+
+	/* Initialise the fun */
+	fun_init( fun , 2 );
+	fun->a = a;
+	fun->b = b;
+
+	/* Assign the vals. */
+    fun->vals.real[0] = b;
+    fun->vals.real[1] = a;
+
+    /* Assign the coeffs. */
+    fun->coeffs.real[0] = 0.5*(b+a);
+    fun->coeffs.real[1] = 0.5*(b-a);
+
+    /* Assign the points. */
+    fun->points[0] = 1.0;
+    fun->points[1] = -1.0;
+       
+    /* Update the scale */
+    a = fabs(a); b = fabs(b);
+    if ( a > b )
+        fun->scale = a;
+    else
+        fun->scale = b;
+        
+    /* All is well. */
+    return fun_err_ok;
+    
+    }
 
 /**
  * @brief Compose a #fun wth a function.
@@ -77,7 +121,6 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  */
 
 int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , double * ) , struct fun *B ) {
-//int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int , double * , void * ) , double a , double b , void *data ) {
     double *x, *v, *coeffs, scale = 0.0;
     double a, b;
     double m, h;
@@ -117,9 +160,9 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     /* Main loop. */
     while ( 1 ) {  
 
-        /* Get the N chebpts. */
+        /* Prolong A into tmp. */
         if ( fun_prolong( A , N , &tmp ) < 0 )
-            return -1; //Error in prolong
+            return error(fun_err); //Error in prolong
                 
         /* Evaluate the op. */
         if ( (*op)( tmp.vals.real , N , v ) < 0 )
@@ -132,6 +175,10 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
 
         /* Compute the coeffs from the values. */
         if ( util_chebpoly( v , N , coeffs ) < 0 )
+            return error(fun_err_util);
+            
+        /* Compute the coeffs from the values. */
+        if ( util_chebpts( N , x ) < 0 )
             return error(fun_err_util);
 
         /* Check convergence of the coefficients. */
@@ -335,9 +382,9 @@ int fun_plot ( struct fun *f1 ) {
 
     /*** LINES ***/
     /* Open the output file. */
-    if ( ( lines = fopen( "fun_test.dump" , "w" ) ) == NULL ) {
-        printf("fun_test: unable to create fun_test.dump.\n");
-        return -1;
+    if ( ( lines = fopen( "fun_plot.dump" , "w" ) ) == NULL ) {
+        printf("fun_test: unable to create fun_plot.dump.\n");
+        return error(fun_err_gnuplot);
         }
     /* Get the lines */
     for ( k = 0 ; k < npts ; k++ ) {
@@ -350,9 +397,9 @@ int fun_plot ( struct fun *f1 ) {
 
     /*** MARKS ***/
     /* Open the output file. */
-    if ( ( marks = fopen( "fun_test2.dump" , "w" ) ) == NULL ) {
-        printf("fun_test: unable to create fun_test2.dump.\n");
-        return -1;
+    if ( ( marks = fopen( "fun_plot2.dump" , "w" ) ) == NULL ) {
+        printf("fun_plot: unable to create fun_plot2.dump.\n");
+        return error(fun_err_gnuplot);
         }
     /* Get the marks */
     for ( k = 0 ; k < f1->n ; k++ ) {
@@ -364,12 +411,12 @@ int fun_plot ( struct fun *f1 ) {
 
     /* Fire-up gnuplot. */
     if ( ( pipe = popen( "gnuplot -persist" , "w" ) ) == NULL ) {
-        printf("fun_test: unable to create a pipe to gnuplot.\n");
-        return -1;
+        printf("fun_plot: unable to create a pipe to gnuplot.\n");
+        return error(fun_err_gnuplot);
         }
     
     /* Pipe the data */
-    fprintf( pipe , "set term wxt 1\np 'fun_test.dump' u 1:2 w lines title \"f\", 'fun_test2.dump' u 1:2 w points ps 3 title \"\"\n" );
+    fprintf( pipe , "set term wxt 1\np 'fun_plot.dump' u 1:2 w lines title \"f\", 'fun_plot2.dump' u 1:2 w points ps 3 title \"\"\n" );
 
     /* Close the pipe */
     pclose(pipe);
@@ -1169,7 +1216,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Trivial linear case. */
         else if ( N == 1 ) {
             tmp = -fun->coeffs.real[0] / fun->coeffs.real[1] * 0.5 * ( fun->a + fun->b );
-            if ( tmp < -1.0 - tol || tmp > 1.0 + tol) {
+            if ( tmp > -1.0 - tol && tmp < 1.0 + tol) {
                 roots[0] = tmp;
                 return 1;
                 }
@@ -1201,9 +1248,10 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Construct the colleague matrix. */
         /* Do N = 2 case by hand. */
         if ( N == 2 ) { 
-            A[0] = fun->coeffs.real[1];
-            A[1] = fun->coeffs.real[0];
-            A[2] = 1.0;
+            A[0] = cN * fun->coeffs.real[1];
+            A[1] = 1.0;
+            A[2] = cN * fun->coeffs.real[0] + 0.5;
+
             }
         /* General case. */ 
         else { 
@@ -1234,8 +1282,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
 			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol)
-                roots[nroots++] = rr[j];
-                
+                roots[nroots++] = rr[j];                
 		}
     else {
     /* Recurse. */
