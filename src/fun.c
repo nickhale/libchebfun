@@ -122,7 +122,7 @@ int fun_create_x ( struct fun *fun , double a , double b ) {
  * off" (although neither does the MATLAB implementation).
  */
 
-int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , double * ) , struct fun *B ) {
+int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , double * , void * ) , struct fun *B , void *data ) {
     double *x, *v, *coeffs, scale = 0.0;
     double a, b;
     double m, h;
@@ -178,7 +178,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
             memcpy( v , A->vals.real , sizeof(double) * N );
                 
         /* Evaluate the op. */
-        if ( (*op)( v , N , v ) < 0 )
+        if ( (*op)( v , N , v , data ) < 0 )
             return error(fun_err_fx);
 
         /* Update the scale. */
@@ -250,9 +250,9 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
 
 int fun_poly ( struct fun *f1 , double *out ) {
 
-    int j, k, l, n, lwr;
+    int j, k, n, lwr;
     int *tn, *tn1, *tn2, *tmp;
-    int *fac, fac_k, fac_kmj, fac_j;
+    int *fac;
     double alpha, beta, binom, tmpout, *powa, *powb;
 
     /* Routine checks of sanity. */
@@ -329,8 +329,8 @@ int fun_poly ( struct fun *f1 , double *out ) {
             /* Constants for rescaling */
             alpha = 2.0 / (f1->b - f1->a);
             beta = - (f1->b + f1->a) / (f1->b - f1->a);
-            if ( ( ( powa = (int *)alloca( sizeof(double) * n ) ) == NULL ) ||
-                 ( ( powb = (int *)alloca( sizeof(double) * n ) ) == NULL ) )
+            if ( ( ( powa = (double *)alloca( sizeof(double) * n ) ) == NULL ) ||
+                 ( ( powb = (double *)alloca( sizeof(double) * n ) ) == NULL ) )
                 return error(fun_err_malloc);
             powa[0] = 1.0; powb[0] = 1.0;
             for ( k = 1 ; k < n ; k++ ) {

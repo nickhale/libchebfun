@@ -675,7 +675,7 @@ int chebtest_composetest ( char **name ) {
         return 0;
         }     
         
-    int sinx ( const double *x , unsigned int N , double *v ) {
+    int sinx ( const double *x , unsigned int N , double *v , void *data ) {
         int k;
         for ( k = 0 ; k < N ; k++ )
             v[k] = sin(x[k]);
@@ -714,7 +714,7 @@ int chebtest_composetest ( char **name ) {
     if ( fun_create_vec( &f , &x1 , 0 , 1.0 , NULL ) < 0 )
         return FAIL;
     /* Compose f with sinx. */
-    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+    if ( fun_comp_vec( &f , &sinx , &f , NULL ) < 0 )
         return FAIL;
     /* Compute compostition manually. */
     if ( fun_create_vec( &g , &sinx1 , 0.0 , 1.0 , NULL ) < 0 )
@@ -733,7 +733,7 @@ int chebtest_composetest ( char **name ) {
     if ( fun_create_vec( &f , &x2 , 0 , 1.0 , NULL ) < 0 )
         return FAIL;
     /* Compose f with sinx. */
-    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+    if ( fun_comp_vec( &f , &sinx , &f , NULL ) < 0 )
         return FAIL;
     /* Compute compostition manually. */
     if ( fun_create_vec( &g , &sinx2 , 0.0 , 1.0 , NULL ) < 0 )
@@ -752,7 +752,7 @@ int chebtest_composetest ( char **name ) {
     if ( fun_create_vec( &f , &x4 , 0 , 1.0 , NULL ) < 0 )
         return FAIL;
     /* Compose f with sinx. */
-    if ( fun_comp_vec( &f , &sinx , &f ) < 0 )
+    if ( fun_comp_vec( &f , &sinx , &f , NULL ) < 0 )
         return FAIL;
     /* Compute compostition manually. */
     if ( fun_create_vec( &g , &sinx4 , 0.0 , 1.0 , NULL ) < 0 )

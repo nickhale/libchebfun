@@ -54,7 +54,7 @@ int main ( ) {
 //    fun_gnuplot( &x );
 
     // Compose.
-    fun_comp_vec( &x , &thefun , &f );
+    fun_comp_vec( &x , &thefun , &f , NULL );
 //    fun_gnuplot( &f );
     fun_display( &f , stdout );
 
