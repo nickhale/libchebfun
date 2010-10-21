@@ -861,7 +861,8 @@ int main ( int argc , char *argv[] ) {
     int (*tests[12])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
         &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
-        &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest, &chebtest_rootspol};
+        &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest , 
+        &chebtest_rootspol };
     
     int k, res;
     char *name = NULL;

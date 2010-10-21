@@ -49,7 +49,7 @@ int main ( ) {
         }
 
     // Make x.
-    fun_x( &x, -1.0 , 1.0 );
+    fun_create_x( &x, -1.0 , 1.0 );
 //    fun_display( &x , stdout );
 //    fun_plot( &x );
 
@@ -89,7 +89,7 @@ int main ( ) {
         }
 
     // Make x.
-    fun_x( &x, 0.0 , 6.0 );
+    fun_create_x( &x, 0.0 , 6.0 );
 //    fun_display( &x , stdout );
 //    fun_plot( &x );
 
@@ -123,7 +123,7 @@ int main ( ) {
         }
 
     // Make x.
-    fun_x( &x, 0.0 , 100.0 );
+    fun_create_x( &x, 0.0 , 100.0 );
 //    fun_display( &x , stdout );
     if ( fun_plot( &x ) < 0 )
         errs_dump( stdout );
@@ -145,7 +145,7 @@ int main ( ) {
 	fun_clean( &f );
 
     // Make x again.
-    fun_x( &x, 1000000.0 , 1001000.0 );
+    fun_create_x( &x, 1000000.0 , 1001000.0 );
 //    fun_display( &x , stdout );
 //    fun_plot( &x );
 

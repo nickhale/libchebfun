@@ -50,11 +50,12 @@ const char *fun_err_msg[] = {
     "A call to GNUPLOT wasn't very cool." };
     
 /* Define a macro to store the errors. */
-#define error( id )     ( fun_err = errs_register( id , fun_err_msg[-id] , __LINE__ , __FILE__ ) )
+#define error( id )     ( fun_err = errs_register( id , fun_err_msg[-id] , __LINE__ , __FUNCTION__ , __FILE__ ) )
     
     
 /* Constant struct for virgin funs. */
 const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
+
 
 /**
  * @brief Constructs a #fun of x on the interval a b.
@@ -65,7 +66,7 @@ const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NUL
  * @return #fun_err_ok or < 0 on error. 
  */
 
-int fun_x ( struct fun *fun , double a , double b ) {
+int fun_create_x ( struct fun *fun , double a , double b ) {
 
     /* Check inputs. */
     if ( fun == NULL )
@@ -100,6 +101,7 @@ int fun_x ( struct fun *fun , double a , double b ) {
     
     }
 
+
 /**
  * @brief Compose a #fun wth a function.
  *
@@ -126,7 +128,6 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     double m, h;
     unsigned int N;
     int k, N_new;
-    struct fun tmp = FUN_EMPTY;
     
     /* Routine checks of sanity. */
     if ( ( A == NULL ) || ( op == NULL ) )
@@ -160,12 +161,24 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     /* Main loop. */
     while ( 1 ) {  
 
-        /* Prolong A into tmp. */
-        if ( fun_prolong( A , N , &tmp ) < 0 )
-            return error(fun_err); //Error in prolong
+        /* Evaluate A at N chebyshev points and put the values in v. */
+        if ( N > A->n ) {
+            memcpy( coeffs, A->coeffs.real , sizeof(double) * A->n );
+            bzero( &(coeffs[A->n]) , sizeof(double) * (N - A->n) );
+            if ( util_chebpolyval( coeffs , N , v ) < 0 )
+                return error(fun_err_util);
+            }
+        else if ( A->n > N ) {
+            if ( util_chebpts( N , x ) < 0 )
+                return error(fun_err_util);
+            if ( fun_eval_clenshaw_vec( A , x , N , v ) < 0 )
+                return error(fun_err);
+            }
+        else
+            memcpy( v , A->vals.real , sizeof(double) * N );
                 
         /* Evaluate the op. */
-        if ( (*op)( tmp.vals.real , N , v ) < 0 )
+        if ( (*op)( v , N , v ) < 0 )
             return error(fun_err_fx);
 
         /* Update the scale. */
@@ -220,13 +233,11 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     B->a = a;
     B->b = b;
 
-    /* Thanks buddy. */
-    fun_clean( &tmp );
-    
     /* We're outta here! */
     return fun_err_ok;
     
 }
+
 
 /**
  * @brief Compute the polynomial coefficients of a #fun.
@@ -520,7 +531,7 @@ int fun_isequal ( struct fun *A , struct fun *B ) {
  * @return #fun_err_ok or < 0 if an error occured.
  */
 
-int fun_prolong( struct fun *A , unsigned int N , struct fun *B ) {
+int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
 	
 	int j, k, m;
     double *c;

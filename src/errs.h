@@ -30,6 +30,6 @@ extern const char *errs_err_msg[];
 
 
 /* Functions. */
-int errs_register( int id , const char *msg , int line , char *file );
+int errs_register( int id , const char *msg , int line , const char *func , char *file );
 int errs_dump( FILE *out );
 void errs_clear( );

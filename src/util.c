@@ -39,7 +39,7 @@ const char *util_err_msg[] = {
     "A call to malloc failed, probably due to insufficient memory." };
 
 /* Define a macro to store the errors. */
-#define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FILE__ ) )
+#define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FUNCTION__ , __FILE__ ) )
     
 /**
  * @brief construct the Chebyshev differentiation matrix.

@@ -35,7 +35,7 @@ const char *errs_err_msg[] = {
 /* The error stack. */
 struct {
     int id, line;
-    const char *msg, *file;
+    const char *msg, *func, *file;
     } errs_stack[ errs_maxstack ];
 int errs_count = 0;
 
@@ -64,8 +64,8 @@ int errs_dump( FILE *out ) {
     
     /* Loop over the error stack, bottom-up. */
     for ( k = 0 ; k < errs_count ; k++ )
-        fprintf( out , "%s:%i: %s (%i)\n" ,
-            errs_stack[k].file , errs_stack[k].line , errs_stack[k].msg , errs_stack[k].id );
+        fprintf( out , "%s:%s:%i: %s (%i)\n" ,
+            errs_stack[k].file , errs_stack[k].func , errs_stack[k].line , errs_stack[k].msg , errs_stack[k].id );
             
     /* Clean up the stack. */
     errs_clear();
@@ -87,7 +87,7 @@ int errs_dump( FILE *out ) {
  * @return The value of @c id.
  */
  
-int errs_register( int id , const char *msg , int line , char *file ) {
+int errs_register( int id , const char *msg , int line , const char *func , char *file ) {
 
     /* Is there any room left on the stack? */
     if ( errs_count < errs_maxstack ) {
@@ -96,6 +96,7 @@ int errs_register( int id , const char *msg , int line , char *file ) {
         errs_stack[errs_count].id = id;
         errs_stack[errs_count].msg = msg;
         errs_stack[errs_count].line = line;
+        errs_stack[errs_count].func = func;
         errs_stack[errs_count].file = file;
         
         /* Increase the counter. */
