@@ -135,7 +135,7 @@ double fun_err_norm2 ( struct fun *A , struct fun *B );
 double fun_err_norm_inf ( struct fun *A , struct fun *B );
 int fun_newdomain( struct fun *fun , double a , double b);
 int fun_isequal ( struct fun *A , struct fun *B );
-int fun_plot ( struct fun *f1 );
+int fun_gnuplot ( struct fun *f1 );
 int fun_poly ( struct fun *f1 , double *out );
 int fun_comp_vec ( struct fun *A , int (*fx)( const double * , unsigned int , double * ) , struct fun *B );
 int fun_create_x ( struct fun *fun , double a , double b );

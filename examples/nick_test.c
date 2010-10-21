@@ -51,11 +51,11 @@ int main ( ) {
     // Make x.
     fun_create_x( &x, -1.0 , 1.0 );
 //    fun_display( &x , stdout );
-//    fun_plot( &x );
+//    fun_gnuplot( &x );
 
     // Compose.
     fun_comp_vec( &x , &thefun , &f );
-//    fun_plot( &f );
+//    fun_gnuplot( &f );
     fun_display( &f , stdout );
 
     // Compute roots
@@ -91,11 +91,11 @@ int main ( ) {
     // Make x.
     fun_create_x( &x, 0.0 , 6.0 );
 //    fun_display( &x , stdout );
-//    fun_plot( &x );
+//    fun_gnuplot( &x );
 
     // Compose.
     fun_comp_vec( &x , &thefun , &f );
-//    fun_plot( &f );
+//    fun_gnuplot( &f );
 
 	// Clean.
 	fun_clean( &x );
@@ -125,13 +125,13 @@ int main ( ) {
     // Make x.
     fun_create_x( &x, 0.0 , 100.0 );
 //    fun_display( &x , stdout );
-    if ( fun_plot( &x ) < 0 )
+    if ( fun_gnuplot( &x ) < 0 )
         errs_dump( stdout );
     
 
     // Compose.
     fun_comp_vec( &x , &thefun , &f );
-    if ( fun_plot( &f ) < 0 )
+    if ( fun_gnuplot( &f ) < 0 )
         errs_dump( stdout );
 
     // Find the roots.
@@ -147,13 +147,13 @@ int main ( ) {
     // Make x again.
     fun_create_x( &x, 1000000.0 , 1001000.0 );
 //    fun_display( &x , stdout );
-//    fun_plot( &x );
+//    fun_gnuplot( &x );
 
     // Compose.
     if ( fun_comp_vec( &x , &thefun , &f ) < 0 )
         errs_dump( stdout );
 //    fun_display( &f , stdout );
-//    if ( fun_plot( &f ) < 0 )
+//    if ( fun_gnuplot( &f ) < 0 )
 //        errs_dump( stdout );
 //    printf("The length of f is %i\n",f.n);
     

@@ -236,7 +236,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     /* We're outta here! */
     return fun_err_ok;
     
-}
+    }
 
 
 /**
@@ -252,8 +252,8 @@ int fun_poly ( struct fun *f1 , double *out ) {
 
     int j, k, l, n, lwr;
     int *tn, *tn1, *tn2, *tmp;
-    int fac_k, fac_kmj, fac_j;
-    double alpha, beta, binom, tmpout;
+    int *fac, fac_k, fac_kmj, fac_j;
+    double alpha, beta, binom, tmpout, *powa, *powb;
 
     /* Routine checks of sanity. */
     if ( f1 == NULL )
@@ -285,10 +285,7 @@ int fun_poly ( struct fun *f1 , double *out ) {
              ( ( tn1 = (int *)alloca( sizeof(int) * n ) ) == NULL ) ||
              ( ( tn2 = (int *)alloca( sizeof(int) * n ) ) == NULL ) )
             return error(fun_err_malloc);
-        /* Align it nicely */
-        tn  = (int *)( (((size_t)tn) + 15 ) & ~15 );
-        tn1 = (int *)( (((size_t)tn1) + 15 ) & ~15 );
-        tn2 = (int *)( (((size_t)tn2) + 15 ) & ~15 );
+
         /* Zero it out */
         bzero( tn , sizeof(int) * n );
         bzero( tn1 , sizeof(int) * n );
@@ -322,39 +319,43 @@ int fun_poly ( struct fun *f1 , double *out ) {
 
         /* Rescale for arbitrary intervals */
         if ( f1->a != -1.0 || f1->b != 1.0 ) {
+        
+            /* Pre-compute the factorials. */
+            if ( ( fac = (int *)alloca( sizeof(int) * n ) ) == NULL )
+                return error(fun_err_malloc);
+            for ( fac[0] = 1 , k = 1 ; k < n ; k++ )
+                fac[k] = fac[k-1] * k;
+            
             /* Constants for rescaling */
             alpha = 2.0 / (f1->b - f1->a);
             beta = - (f1->b + f1->a) / (f1->b - f1->a);
+            if ( ( ( powa = (int *)alloca( sizeof(double) * n ) ) == NULL ) ||
+                 ( ( powb = (int *)alloca( sizeof(double) * n ) ) == NULL ) )
+                return error(fun_err_malloc);
+            powa[0] = 1.0; powb[0] = 1.0;
+            for ( k = 1 ; k < n ; k++ ) {
+                powa[k] = powa[k-1] * alpha;
+                powb[k] = powb[k-1] * beta;
+                }
             
+            /* Compute binomial coefficients */
             for ( j = 0 ; j < n ; j++ ) {
-                /* Compute binomial coefficients */
-                fac_j = 1;
-                for ( l = 2 ; l <= j ; l++ )
-                    fac_j *= l;
                 for ( k = j ; k < n ; k++ ) {
-                    if ( k == j ) {
-                        fac_k = 1.0;
-                        for ( l = 2 ; l <= k ; l++ )
-                            fac_k *= l;
-                        }
-                    else
-                        fac_k *= k;
-                    fac_kmj = 1;
-                    for ( l = 2 ; l <= k-j ; l++ )
-                        fac_kmj *= l;
-                    binom = (double)fac_k/(double)(fac_kmj*fac_j);
+                
+                    /* Get the binomial number */
+                    binom = ((double)fac[k]) / ( fac[k-j] * fac[j] );
     
                     /* Apply the update */
                     if ( k == j )
-                        out[n-1-j] *= binom*pow(alpha,j);
+                        out[n-1-j] *= binom * powa[j];
                     else
-                        out[n-1-j] += out[n-1-k]*binom*pow(beta,k-j)*pow(alpha,j);
+                        out[n-1-j] += out[n-1-k] * binom * powb[k-j] * powa[j];
                     }
                 }
             } /* End rescale for arbitrary intervals */
 
         /* Reverse the ordering */
-        for ( k = 0 ; k < (n - n % 2) / 2  ; k++ ) {
+        for ( k = 0 ; k < n / 2  ; k++ ) {
             tmpout = out[k];
             out[k] = out[n-1-k];
             out[n-1-k] = tmpout;
@@ -364,7 +365,8 @@ int fun_poly ( struct fun *f1 , double *out ) {
 
     /* Sweet. */
     return fun_err_ok; 
-}
+    
+    }
 
 
 /**
@@ -375,7 +377,7 @@ int fun_poly ( struct fun *f1 , double *out ) {
  * @return #fun_err_ok or < 0 on error (see #fun_err).
  */
  
-int fun_plot ( struct fun *f1 ) {
+int fun_gnuplot ( struct fun *f1 ) {
 
     int k, npts = 1000;
     double tk, xk, vk, scl1, scl2;
@@ -393,8 +395,8 @@ int fun_plot ( struct fun *f1 ) {
 
     /*** LINES ***/
     /* Open the output file. */
-    if ( ( lines = fopen( "fun_plot.dump" , "w" ) ) == NULL ) {
-        printf("fun_test: unable to create fun_plot.dump.\n");
+    if ( ( lines = fopen( "fun_gnuplot.dump" , "w" ) ) == NULL ) {
+        printf("fun_test: unable to create fun_gnuplot.dump.\n");
         return error(fun_err_gnuplot);
         }
     /* Get the lines */
@@ -408,8 +410,8 @@ int fun_plot ( struct fun *f1 ) {
 
     /*** MARKS ***/
     /* Open the output file. */
-    if ( ( marks = fopen( "fun_plot2.dump" , "w" ) ) == NULL ) {
-        printf("fun_plot: unable to create fun_plot2.dump.\n");
+    if ( ( marks = fopen( "fun_gnuplot2.dump" , "w" ) ) == NULL ) {
+        printf("fun_gnuplot: unable to create fun_gnuplot2.dump.\n");
         return error(fun_err_gnuplot);
         }
     /* Get the marks */
@@ -422,17 +424,18 @@ int fun_plot ( struct fun *f1 ) {
 
     /* Fire-up gnuplot. */
     if ( ( pipe = popen( "gnuplot -persist" , "w" ) ) == NULL ) {
-        printf("fun_plot: unable to create a pipe to gnuplot.\n");
+        printf("fun_gnuplot: unable to create a pipe to gnuplot.\n");
         return error(fun_err_gnuplot);
         }
     
     /* Pipe the data */
-    fprintf( pipe , "set term wxt 1\np 'fun_plot.dump' u 1:2 w lines title \"f\", 'fun_plot2.dump' u 1:2 w points ps 3 title \"\"\n" );
+    fprintf( pipe , "set term wxt 1\np 'fun_gnuplot.dump' u 1:2 w lines title \"f\", 'fun_gnuplot2.dump' u 1:2 w points ps 2 title \"\"\n" );
 
     /* Close the pipe */
     pclose(pipe);
 
     return fun_err_ok; 
+    
     }
 
 
