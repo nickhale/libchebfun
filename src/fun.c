@@ -1212,6 +1212,18 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         /* Remove small trailing coefficients */
         fun_rescale ( fun );
         N = fun->n-1;
+        
+/*
+        cmax = 0.0;
+        for ( k = 0 ; k <= N ; k ++ )
+            if ( cmax < fabs(fun->coeffs.real[N]) )
+                cmax = fabs(fun->coeffs.real[N]);
+        if ( fabs(fun->coeffs.real[N]) < 1e-14 * cmax )
+        	while ( fabs(fun->coeffs.real[N]) < 1e-14 * cmax && N > 0)
+           		N--;
+        cN = -0.5 / fun->coeffs.real[N];
+*/
+
         if ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale)
         	while ( fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0)
            		N--;
@@ -1309,11 +1321,27 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
             fun->b = 1.0;
             }
 
+        /* We'll get rid of the magic constant for now to make things easier... */
+        c = 0.0;
+
         /* Restrict to subintervals (with magic ChebConstant c) */
         fun_restrict( fun , -1.0, c , &funL );
         _fun_simplify( &funL , 1e-15 );
         fun_restrict( fun , c , 1.0 , &funR );
         _fun_simplify( &funR , 1e-15 );
+
+        /* Dirty hack to get around the problem of funs not being small enough */
+        if (funL.n > (fun->n-(fun->n%2))/2)
+            fun_prolong( &funL , (fun->n-(fun->n%2))/2 , &funL );
+        if (funR.n > (fun->n-(fun->n%2))/2)
+            fun_prolong( &funR , (fun->n-(fun->n%2))/2 , &funR );
+        
+/*
+        if ( (double)(funL.n) > (double)(fun->n)/2.0 + 10.0 )
+            printf("Warning. Left fun too big! left = %i, parent = %i\n",funL.n,fun->n);
+        if ( (double)funR.n > (double)(fun->n)/2.0 + 10.0)
+            printf("Warning. Right fun too big! left = %i, parent = %i\n",funR.n,fun->n);
+*/        
     
 		/* Reset the interval */
         fun->a = a;

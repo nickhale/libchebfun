@@ -22,7 +22,7 @@ AUTOMAKE_OPTIONS=gnu
 AM_CFLAGS = -g -I../src
 
 # Set-up the library
-bin_PROGRAMS = fun_test pedro_test nick_test chebtest
+bin_PROGRAMS = fun_test pedro_test nick_test chebtest BesselRoots WildFunction
 
 # Sources for fun_test
 fun_test_SOURCES = fun_test.c
@@ -39,5 +39,14 @@ nick_test_LDADD = ../src/.libs/libchebfun.a
 # Sources for chebtest
 chebtest_SOURCES = chebtest.c
 chebtest_LDADD = ../src/.libs/libchebfun.a
+
+# Sources for WildFunction
+WildFunction_SOURCES = WildFunction.c
+WildFunction_LDADD = ../src/.libs/libchebfun.a
+
+# Sources for BesselRoots
+BesselRoots_SOURCES = BesselRoots.c
+BesselRoots_LDADD = ../src/.libs/libchebfun.a
+
 
 
