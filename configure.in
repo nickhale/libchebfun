@@ -31,6 +31,10 @@ CFLAGS=-Wall
 # find and test the compiler
 AC_PROG_CC
 AC_LANG_C
+# AX_CC_MAXOPT
+AX_FUNC_POSIX_MEMALIGN
+# AX_GCC_ARCHFLAG([no])
+# AX_EXT
 
 # autoconf stuff
 AC_PROG_INSTALL

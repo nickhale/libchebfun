@@ -38,8 +38,110 @@ const char *util_err_msg[] = {
     "An unexpected NULL-pointer was encountered.",
     "A call to malloc failed, probably due to insufficient memory." };
 
+
 /* Define a macro to store the errors. */
 #define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FUNCTION__ , __FILE__ ) )
+   
+    
+/**
+ * @brief Evaluate a polynomial using the Clenshaw algorithm.
+ *
+ * @param coeffs A pointer to an array of coefficients.
+ * @param N The number of coefficients.
+ * @param x The position at which to evaluate the polynomial.
+ * @return The polynomial evaluated at @c x or @c NaN if an error occured
+ *      (see #util_err).
+ *
+ * @sa util_clenshaw_vec
+ */
+ 
+double util_clenshaw ( double *coeffs , unsigned int N , double x ) {
+
+    int k;
+    double yn = 0.0, ynp1 = 0.0, ynp2;
+
+    /* Check for nonsense. */
+    if ( coeffs == NULL ) {
+        error(util_err_null);
+        return NAN;
+        }
+        
+    /* Check for the simplest cases. */
+    if ( N == 0 )
+        return 0.0;
+    else if (N == 1 )
+        return coeffs[0];
+        
+    /* Evaluate the recurrence. */
+    for ( k = N ; k >= 0 ; k-- ) {
+        ynp2 = ynp1; ynp1 = yn;
+        yn = coeffs[k] + 2 * x * ynp1 - ynp2;
+        }
+        
+    /* Return the result. */
+    return yn - x * ynp1;
+        
+    }
+    
+    
+/**
+ * @brief Evaluate a polynomial at a vector of points using the
+ *      Clenshaw algorithm.
+ *
+ * @param coeffs A pointer to an array of coefficients.
+ * @param N The number of coefficients.
+ * @param x A pointer to an array of @c M double values containing the positions
+ *      at which to evaluate the polynomial.
+ * @param M The number of positions in @c x.
+ * @param out A pointer to an array of doubles of length @c M in which the
+ *      values of the polynomial at @c x will be stored.
+ * @return #util_err_ok or < 0 if an error occured (see #util_err).
+ *
+ * @sa util_clenshaw
+ */
+
+int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned int M , double *out ) {
+
+    int j, k;
+    double yn, ynp1 = 0.0, ynp2;
+
+    /* Check for nonsense. */
+    if ( coeffs == NULL || x == NULL || out == NULL )
+        return error(util_err_null);
+        
+    /* Check for the simplest cases. */
+    if ( N < 2 ) {
+        if ( N == 0 )
+            for ( k = 0 ; k < M ; k++ )
+                out[k] = 0.0;
+        else
+            for ( k = 0 ; k < M ; k++ )
+                out[k] = coeffs[0];
+        return util_err_ok;
+        }
+        
+    /* Loop over the input values. */
+    for ( j = 0 ; j < M ; j++ ) {
+        
+        /* Init the recurrence. */
+        ynp1 = 0.0; yn = 0.0;
+
+        /* Evaluate the recurrence. */
+        for ( k = N-1 ; k >= 0 ; k-- ) {
+            ynp2 = ynp1; ynp1 = yn;
+            yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
+            }
+
+        /* store the result. */
+        out[j] = yn - x[j] * ynp1;
+        
+        }
+        
+    /* If all went well... */
+    return util_err_ok;
+        
+    }
+    
     
 /**
  * @brief construct the Chebyshev differentiation matrix.
@@ -109,7 +211,7 @@ double * util_diffmat ( unsigned int N ) {
             }
         printf("\n");
         }
-    /*
+    */
 
     /* Weee! */
     return D;

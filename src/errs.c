@@ -82,6 +82,7 @@ int errs_dump( FILE *out ) {
  * @param id An error identifier that will be returned.
  * @param msg A pointer to a string containing a descriptive error message.
  * @param line The line on which the error occured.
+ * @param func The name of the function in which the error occured.
  * @param file The name of the file in which the error occured.
  * 
  * @return The value of @c id.

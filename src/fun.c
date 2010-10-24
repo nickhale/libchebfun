@@ -22,8 +22,10 @@
 #include <stdio.h>
 #include <complex.h>
 #include <math.h>
+#include <float.h>
 #include <string.h>
 #include <clapack.h>
+#include <fftw3.h>
 
 /* Local includes. */
 #include "errs.h"
@@ -54,7 +56,7 @@ const char *fun_err_msg[] = {
     
     
 /* Constant struct for virgin funs. */
-const struct fun FUN_EMPTY = { 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
+const struct fun FUN_EMPTY = { 0 , 0 , 0 , 0.0 , 0.0 , 0.0 , NULL , { NULL } , { NULL } };
 
 
 /**
@@ -108,6 +110,7 @@ int fun_create_x ( struct fun *fun , double a , double b ) {
  * @param A The input #fun.
  * @param op The function to compose with.
  * @param B The output fun (which maybe the same as A).
+ * @param data Pointer to arbitrary data to be passed to @c op.
  *
  * @return #fun_err_ok or < 0 on error (see #fun_err).
  *
@@ -123,6 +126,7 @@ int fun_create_x ( struct fun *fun , double a , double b ) {
  */
 
 int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , double * , void * ) , struct fun *B , void *data ) {
+    
     double *x, *v, *coeffs, scale = 0.0;
     double a, b;
     double m, h;
@@ -216,7 +220,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
         } /* Main loop. */
         
     /* Allocate the data inside the fun to the correct size. */
-    if ( !( B->flags & fun_flag_init ) || B->n < N ) {
+    if ( !( B->flags & fun_flag_init ) || B->size < N ) {
         if ( _fun_alloc( B , N ) < 0 )
             return error(fun_err);
         }
@@ -585,12 +589,15 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
         /* Otherwise, re-create the vals. */
         else {
         
-            /* Copy the coefficients from A to B */
-            if ( N >= A->n )
+            /* Copy the coefficients from A to B (pad zeros). */
+            if ( N >= A->n ){
                 memcpy( B->coeffs.real , A->coeffs.real , sizeof(double) * A->n );
+                bzero( &(B->coeffs.real[A->n]) , sizeof(double) * (N - A->n) );
+                }
             
             /* Restricting - need to consider aliasing */
             else {
+                bzero( B->coeffs.real , sizeof(double) * N );
                 for ( k = 0 ; k < A->n ; k += 2*(N-2) )
                     B->coeffs.real[0] += A->coeffs.real[k];
                 for ( j = 1 ; j < N-1 ; j++ ) {
@@ -612,12 +619,12 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
         }
         
     /* Treatment if B == A and the function needs to grow. */
-    else if ( N > A->n ) {
+    else if ( N > A->size ) {
     
         /* Allocate a new coeffs array and fill it with the old coeffs. */
         if ( posix_memalign( (void **)&c , 16 , sizeof(double) * N ) != 0 )
             return error(fun_err_malloc);
-        memcpy( A->coeffs.real , c , sizeof(double) * A->n );
+        memcpy( c , A->coeffs.real , sizeof(double) * A->n );
         bzero( &(c[A->n]) , sizeof(double) * (N - A->n) );
         free( B->coeffs.real );
         B->coeffs.real = c;
@@ -634,6 +641,7 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
             
         /* Set the new length. */
         B->n = N;
+        B->size = N;
 
         }
         
@@ -721,7 +729,7 @@ double fun_norm_inf ( struct fun *fun ) {
  * @return #fun_err_ok or < 0 if an error occured
  */
 
-int fun_newdomain ( struct fun *fun , double a , double b) {
+int fun_newdomain ( struct fun *fun , double a , double b ) {
 	
     /* Bad apples? */
     if ( fun == NULL ) {
@@ -733,7 +741,7 @@ int fun_newdomain ( struct fun *fun , double a , double b) {
 
     /* A quick check. */
     if ( b < a )
-        return error(fun_err);
+        return error(fun_err_domain);
 
     /* Assign the new domain. */
     fun->a = a;
@@ -765,7 +773,9 @@ int fun_max ( struct fun *fun , double *maxy , double *maxx ) {
 	
     /* End on a good note. */
     return fun_err_ok;
+    
 	}
+
 
 /**
  * @brief Compute the minimum of a fun on its domain.
@@ -889,7 +899,7 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
         return error(fun_err_null);
         
     /* If fun2 has not been initialized or is too small, re-init. */
-    if ( !(fun2->flags & fun_flag_init) || fun2->n < fun->n )
+    if ( !(fun2->flags & fun_flag_init) || fun2->size < fun->n )
         if ( fun_init( fun2 , fun->n ) < 0 )
             return error(fun_err);
             
@@ -953,7 +963,7 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
     else {
     
         /* Start by cleaning out funout */
-        if ( !( funout->flags & fun_flag_init ) || ( funout->n < fun->n ) ) {
+        if ( !( funout->flags & fun_flag_init ) || ( funout->size < fun->n ) ) {
             if ( fun_init( funout , fun->n ) != fun_err_ok )
                 return error(fun_err);
             }
@@ -975,7 +985,8 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
 	funout->b = B;
 
     /* Get the coefficients. */
-    util_chebpoly ( funout->vals.real  , funout->n , funout->coeffs.real );
+    if ( util_chebpoly( funout->vals.real  , funout->n , funout->coeffs.real ) < 0 )
+        return error(fun_err_util);
 
     /* Simplify */
 // NEED TO PASS A SENSIBLE TOLERANCE
@@ -1058,7 +1069,7 @@ double fun_err_norm2 ( struct fun *A , struct fun *B ) {
     /* Subtract A and B */
     fun_madd ( A , 1.0 , B , -1.0 , &C );  
 
-    /* Subtract A and B */
+    /* Take the 2-norm of the difference. */
     norm = fun_norm2 ( &C ); 
 
     /* Clean C */
@@ -1096,7 +1107,7 @@ double fun_err_norm_inf ( struct fun *A , struct fun *B ) {
     /* Subtract A and B */
     fun_madd ( A , 1.0 , B , -1.0 , &C );  
 
-    /* Subtract A and B */
+    /* Take the inf-norm of the difference. */
     norm = fun_norm_inf ( &C ); 
 
     /* Clean C */
@@ -1120,16 +1131,16 @@ double fun_err_norm_inf ( struct fun *A , struct fun *B ) {
  * We simply call util_simplify.  Should be used internally only!
  */
 
-// AT THE MOMENT TOL IS IGNORED!
 int _fun_simplify ( struct fun *fun , double tol ) {
     
     unsigned int N;
 
     /* Call util_simplify */
-    N = util_simplify ( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , chebopts_opts->eps );
+    if ( ( N = util_simplify( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , tol ) ) < 0 )
+        return error(fun_err_util);
 
     /* Set the new size. */
-    if ( N < fun->n && N > 0)
+    if ( N < fun->n )
         fun->n = N;  
     
     /* Sweet. */
@@ -1185,10 +1196,13 @@ int fun_roots( struct fun *fun , double *roots ) {
  *
  * @return The number of roots found or < 0 if an error occurred.
  *
- * TODO : Move 1 < |roots| < 1+tol to 1.
  */
  
-int fun_roots_unit ( struct fun *fun , double *roots ) {
+/* TODO : Move 1 < |roots| < 1+tol to 1.
+   TODO: Make the recursive part work only on the coefficient vector
+        to avoid generating new funs at every recursion. */
+ 
+int fun_roots_unit_backup ( struct fun *fun , double *roots ) {
 
     double *A, cN, c = -0.004849834917525, cL, cR, z, *rr, *ri, *work, tol, a, b, tmp;
     unsigned int N, nrootsL, nrootsR, nroots = 0;
@@ -1204,13 +1218,15 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     /* Deal with this stupid case. */
     if ( fun->n == 0 ) 
         return 0;
+        
     /* If the fun is small enough, solve the eigenvalue problem. */
     else if ( fun->n < 101 ) {
+    
         /* Set the tolerance for roots being within the interval */
         tol = 100.0 * (fun->b - fun->a) * chebopts_opts->eps;
 
         /* Remove small trailing coefficients */
-        fun_rescale ( fun );
+        _fun_rescale ( fun );
         N = fun->n-1;
         
 /*
@@ -1303,15 +1319,17 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		if ( ok < 0 )
 			return error(fun_err_lapack);
 
-// THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN
+        /* THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN */
 
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
 			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol)
-                roots[nroots++] = rr[j];                
+                roots[nroots++] = rr[j];  
+                              
 		}
+        
+    /* Otherwise, recurse. */
     else {
-    /* Recurse. */
 
         /* Assume unit interval */
         if (fun->points[0] != -1.0 || fun->points[fun->n-1] != 1.0) {
@@ -1319,6 +1337,10 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 			b = fun->b;
             fun->a = -1.0;
             fun->b = 1.0;
+            }
+        else {
+            a = -1.0;
+            b = 1.0;
             }
 
         /* We'll get rid of the magic constant for now to make things easier... */
@@ -1365,6 +1387,298 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         fun_clean( &funR ); 
         
         }
+        
+    /* To the pub!. */
+    return nroots;
+    
+    }
+
+
+int fun_roots_unit ( struct fun *fun , double *roots ) {
+
+    double c = -0.004849834917525, tail_max, temp, *v;
+    int nroots;
+    int j, k;
+    static double *Tleft = NULL, *Tright = NULL;
+    static int sizeT = 0, skipT;
+    fftw_plan plan;
+    fftw_r2r_kind kind = FFTW_REDFT00;
+    
+    
+    /* Recursive routine that works only on the coefficients. */
+    int fun_roots_unit_rec ( double *coeffs , unsigned int N , double h , double *roots ) {
+    
+        int j, k;
+	    int ilo, ihi, ldh, ldz, lwork, ok;
+        int Nl, Nr, nrootsL = 0, nrootsR = 0, nroots = 0;
+	    char job = 'E', compz = 'N';
+        double tol, cN, w;
+        double *cleft, *cright, *rr, *ri, *work, *A, z, *v;
+        
+        /* Is the degree small enough for a colleague matrix approach? */
+        if ( N <= 100 ) {
+        
+            /* Set the horizontal tolerance for roots inside the interval. */
+            tol = 100.0 * h * DBL_EPSILON;
+            
+            /* Adjust N and compute scaling cN. */
+        	for ( N -= 1 ; fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0 ; N-- );
+            cN = -0.5 / coeffs[N];
+
+            /* Trivial case of N==0. */
+            if ( N == 0 ) {
+                if ( coeffs[0] == 0.0 ) {
+                    roots[0] = 0.0;
+                    return 1;
+                    }
+                else
+                    return 0;
+                }
+                
+            /* Trivial linear case (N==1). */
+            if ( N == 1 ) {
+                roots[0] = -coeffs[0] / coeffs[1];
+                if ( roots[0] > -(1+tol) && roots[0] < (1+tol) )
+                    return 1;
+                else
+                    return 0;
+                }
+        
+            /* Initialize the matrix A. */
+            if ( ( A = (double *)alloca( sizeof(double) * (N*N) + 16 ) ) == NULL )
+                return error(fun_err_malloc);
+            A = (double *)( (((size_t)A) + 15 ) & ~15 );
+            bzero( A , sizeof(double) * (N*N) );
+
+            /* Also initialize and shift the output and work vectors */
+            if ( ( rr = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL || 
+			     ( ri = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL ||
+		         ( work = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL )
+                return error(fun_err_malloc);
+            rr = (double *)( (((size_t)rr) + 15 ) & ~15 );
+            ri = (double *)( (((size_t)ri) + 15 ) & ~15 );
+            work = (double *)( (((size_t)work) + 15 ) & ~15 );
+            
+            /* Construct the colleague matrix. */
+            /* Do N = 2 case by hand. */
+            if ( N == 2 ) { 
+            
+                A[0] = cN * coeffs[1];
+                A[1] = 1.0;
+                A[2] = cN * coeffs[0] + 0.5;
+
+                }
+                
+            /* General case. */ 
+            else {
+            
+                /* Assign the coefficients to the first row */
+                for (j = 0 ; j < N ; j++)
+                    A[N*(N-1-j)] = cN * coeffs[j];
+                A[N] += 0.5;
+
+                /* Assign the super- and sub-diagonal */
+                A[1] = 0.5;
+                A[N+2] = 0.5;
+                for (j = 2*N+1 ; j < N*(N-1) ; j += N+1) {
+                    A[j] = 0.5;
+                    A[j+2] = 0.5;
+                    }
+                A[N*(N-1)-1] = 1.0;
+                A[N*N-2] = 0.5;
+                }
+
+            /* Call to LAPACK to solve eigenvalue problem. */
+		    ilo = 1; ihi = N; ldh = N; ldz = 1; lwork = N;
+		    dhseqr_( &job, &compz, &N , &ilo, &ihi, A, &ldh, rr, ri, &z, &ldz, work, &lwork, &ok);
+		    if ( ok < 0 )
+			    return error(fun_err_lapack);
+
+            /* THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN */
+
+            /* Count the number of valid roots and store them. */
+		    for (j = ok ; j < N ; j++)
+			    if ( fabs(ri[j]) < tol && rr[j] >= -(1.0+tol) && rr[j] <= (1.0+tol) )
+                    roots[nroots++] = rr[j];  
+                              
+            }
+            
+        /* Otherwise, split and recurse. */
+        else {
+        
+            /* Allocate arrays for cleft and cright. */
+            if ( ( cleft = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL ||
+                 ( cright = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL )
+                return error(fun_err_malloc);
+            cleft = (double *)( (((size_t)cleft) + 15 ) & ~15 );
+            cright = (double *)( (((size_t)cright) + 15 ) & ~15 );
+            bzero( cleft , sizeof(double) * N );
+            bzero( cright , sizeof(double) * N );
+            
+            /* If N is small enough, compute both halves with Tleft and Tright. */
+            if ( N <= sizeT ) {
+        
+                /* Multiply coeffs with Tleft and Tright to get cleft and cright. */
+                for ( k = 0 ; k < N ; k++ )
+                    for ( j = 0 ; j <= k ; j++ ) {
+                        cleft[j] += coeffs[k] * Tleft[k*skipT+j];
+                        cright[j] += coeffs[k] * Tright[k*skipT+j];
+                        }
+                        
+                }
+
+            /* Otherwise, restrict both halves "by hand". */
+            else {
+
+                /* Allocate the temporary vector for the function values. */
+                if ( ( v = (double *)alloca( sizeof(double) * N + 16 ) ) == NULL )
+                    return error(fun_err_malloc);
+                v = (double *)( (((size_t)v) + 15 ) & ~15 );
+
+                /* Get the coefficients on the left. */
+                if ( util_chebptsAB( N , -1.0 , c , cleft ) < 0 ||
+                     util_clenshaw_vec( coeffs , N , cleft , N , v ) < 0 ||
+                     util_chebpoly( v , N , cleft ) < 0 )
+                    return error(fun_err_util);
+
+                /* Get the coefficients on the right. */
+                if ( util_chebptsAB( N , c , 1.0 , cright ) < 0 ||
+                     util_clenshaw_vec( coeffs , N , cright , N , v ) < 0 ||
+                     util_chebpoly( v , N , cright ) < 0 )
+                    return error(fun_err_util);
+
+                }
+            
+            /* Scale the lengths of cleft and cright. */
+            for ( Nl = N ; Nl > 0 && fabs(cleft[Nl-1]) < tail_max ; Nl-- );
+            for ( Nr = N ; Nr > 0 && fabs(cright[Nr-1]) < tail_max ; Nr-- );
+
+            /* Recurse on the left if Nl > 0. */
+            if ( Nl > 0 ) {
+                if ( ( nrootsL = fun_roots_unit_rec( cleft , Nl , h/2 , roots ) ) < 0 )
+                    return error(fun_err);
+                w = 0.5 * (1.0 + c);
+                for ( nroots = 0 ; nroots < nrootsL ; nroots++ )
+                    roots[nroots] = -1.0 + w * (roots[nroots] + 1.0);
+                }
+            if ( Nr > 0 ) {
+                if ( ( nrootsR = fun_roots_unit_rec( cright , Nr , h/2 , &(roots[nrootsL]) ) ) < 0 )
+                    return error(fun_err);
+                w = 0.5 * (1.0 - c);
+                for ( nroots = nrootsL ; nroots < nrootsL + nrootsR ; nroots++ )
+                    roots[nroots] = c + w * (roots[nroots] + 1.0);
+                }
+            
+            }
+    
+        /* Bail in a good way. */
+        return nroots;
+                
+        }
+    
+    
+    /* Check inputs. */
+    if ( fun == NULL )
+        return error(fun_err_null);
+        
+    /* Deal with this stupid case. */
+    if ( fun->n == 0 ) 
+        return 0;
+        
+    /* Check if the coefficient matrices Tleft and Tright have been
+        computed and are the right size. */
+    if ( fun->n > 100 && Tleft == NULL ) {
+    
+        /* printf("fun_roots_unit: building transformation matrices... "); fflush(stdout); */
+    
+        /* Free any old instance of Tleft and Tright. */
+        if ( Tleft != NULL )
+            free(Tleft);
+        if ( Tright != NULL )
+            free(Tright);
+            
+        /* Set the size. */
+        /* for ( sizeT = 2 ; sizeT < fun->n ; sizeT = 2*sizeT - 1 ); */
+        sizeT = 513;
+        
+        /* Set the stride for the Tleft and Tright matrices such as to
+            preserve alignment. */
+        skipT = (sizeT + 3) & ~3;
+            
+        /* Allocate the new matrices. */
+        if ( posix_memalign( (void**)(&Tleft) , 16 , sizeof(double) * sizeT * skipT ) != 0 ||
+             posix_memalign( (void**)(&Tright) , 16 , sizeof(double) * sizeT * skipT ) != 0 )
+            return error(fun_err_malloc);
+        if ( posix_memalign( (void**)(&v) , 16 , sizeof(double) * sizeT * skipT ) != 0 )
+            return error(fun_err_malloc);
+            
+        /* Compute the left matrix. */
+        for ( k = 0 ; k < sizeT ; k++ )
+            v[k] = 1.0;
+        if ( util_chebptsAB( sizeT , -1.0 , c , &(v[skipT]) ) < 0 )
+            return error(fun_err_util);
+        for ( k = 2 ; k < sizeT ; k++ )
+            for ( j = 0 ; j < sizeT ; j++ )
+                v[k*skipT+j] = 2 * v[skipT+j] * v[(k-1)*skipT+j] - v[(k-2)*skipT+j];
+                
+        /* Transform v to Tleft. */
+        plan = fftw_plan_many_r2r( 1 , &sizeT , sizeT , v , &sizeT , 1 , skipT , Tleft , &sizeT , 1 , skipT , &kind , FFTW_ESTIMATE );
+        fftw_execute(plan);
+        
+        /* Clean up the edge coefficients. */
+        for ( k = 0 ; k < sizeT ; k++ )
+            Tleft[k*skipT] *= 0.5;
+        Tleft[(skipT+1)*(sizeT-1)] *= 0.5;
+        
+        /* Compute the right matrix. */
+        if ( util_chebptsAB( sizeT , c , 1.0 , &(v[skipT]) ) < 0 )
+            return error(fun_err_util);
+        for ( k = 2 ; k < sizeT ; k++ )
+            for ( j = 0 ; j < sizeT ; j++ )
+                v[k*skipT+j] = 2 * v[skipT+j] * v[(k-1)*skipT+j] - v[(k-2)*skipT+j];
+                
+        /* Transform v to Tleft. */
+        /* plan = fftw_plan_many_r2r( 1 , &sizeT , sizeT , v , &sizeT , 1 , skipT , Tright , &sizeT , 1 , skipT , &kind , FFTW_ESTIMATE ); */
+        fftw_execute_r2r( plan , v , Tright );
+        fftw_destroy_plan(plan);
+        
+        /* Clean up the edge coefficients. */
+        for ( k = 0 ; k < sizeT ; k++ )
+            Tright[k*skipT] *= 0.5;
+        Tright[(skipT+1)*(sizeT-1)] *= 0.5;
+        
+        /* Scale both matrices. */
+        temp = 1.0 / (sizeT - 1);
+        for ( k = 0 ; k < skipT * sizeT ; k++ ) {
+            Tleft[k] *= temp;
+            Tright[k] *= temp;
+            }
+        
+        /* Clean up v. */
+        free(v);
+        
+        /* printf("done.\n"); fflush(stdout); */
+        
+        }
+        
+    /* Find out what the coefficient cutoff tail_max is for the global fun. */
+    tail_max = 0.0;
+    for ( k = 1 ; k < fun->n ; k++ ) {
+        temp = fabs( fun->vals.real[k] - fun->vals.real[k-1] );
+        if ( fabs( fun->points[k] - fun->points[k-1] ) > 2 * DBL_EPSILON )
+            temp /= fabs( fun->points[k] - fun->points[k-1] );
+        else
+            temp /= 2.0 * DBL_EPSILON;
+        if ( temp > tail_max )
+            tail_max = temp;
+        }
+    if ( tail_max > 1.0e12 )
+        tail_max = 1.0e12;
+    tail_max *= DBL_EPSILON;
+    
+    /* Call the recursion. */
+    if ( ( nroots = fun_roots_unit_rec( fun->coeffs.real , fun->n , (fun->b - fun->a) , roots ) ) < 0 )
+        return error(fun_err);
         
     /* To the pub!. */
     return nroots;
@@ -1569,21 +1883,28 @@ int fun_init ( struct fun *fun , unsigned int N ) {
     if ( fun == NULL )
         return error(fun_err_null);
         
-    /* Allocate the data inside the fun to the correct size. */
-    _fun_alloc( fun , N);
+    /* Allocate the data inside the fun to the correct size, if needed. */
+    if ( !( fun->flags & fun_flag_init ) || fun->size < N )
+        _fun_alloc( fun , N );
+    else
+        fun->n = N;
 
-    /* Set entries to zero. Is this needed? */
+    /* Set entries to zero. Is this needed?
     bzero( fun->vals.real , sizeof(double) * N );
-    bzero( fun->coeffs.real , sizeof(double) * N );
+    bzero( fun->coeffs.real , sizeof(double) * N ); */
     
     /* Get the Chebyshev nodes. */
     if ( util_chebpts( N , fun->points ) < 0 )
         return error(fun_err_util);
-        
+    
+    /* Set the init flag. */    
+    fun->flags = fun_flag_init;
+    
     /* Jolly good! */
     return fun_err_ok;
     
     }
+
 
 /**
  * @brief Allocate space for a fun to be filled with values.
@@ -1602,17 +1923,18 @@ int _fun_alloc ( struct fun *fun , unsigned int N ) {
     /* Clean the fun, just to be safe. */
     if ( fun_clean( fun ) < 0 )
         return error(fun_err);
-        
+
     /* Allocate the data inside the fun to the correct size. */
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
          posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
          ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
         return error(fun_err_malloc);
-    
+
     /* Write the data to the fun. */
     fun->n = N;
+    fun->size = N;
     fun->flags = fun_flag_init;
-        
+                
     /* Jolly good! */
     return fun_err_ok;
     
@@ -1716,6 +2038,7 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
  */
 
 int fun_diff ( struct fun *f, struct fun *fp ) {
+
     int k, n;
 
     /* Check for null and stuff. */
@@ -1727,7 +2050,7 @@ int fun_diff ( struct fun *f, struct fun *fp ) {
         }
 
     /* If fp is uninit or too small, init fp. */
-    if ( !( fp->flags & fun_flag_init ) || fp->n < f->n - 1 )
+    if ( !( fp->flags & fun_flag_init ) || fp->size < f->n - 1 )
         if ( fun_init( fp , f->n - 1 ) < 0 )
             return error(fun_err);
 
@@ -1743,9 +2066,9 @@ int fun_diff ( struct fun *f, struct fun *fp ) {
         fp->points[0] = 0.5*(f->b-f->a);
         return fun_err_ok;
         } 
-
-    n = f->n;
+    
     /* Apply the recurrence for the new coefficents */
+    n = f->n;
     fp->coeffs.real[n-2] = (double)(2*(n-1)) * f->coeffs.real[n-1];
     fp->coeffs.real[n-3] = (double)(2*(n-2)) * f->coeffs.real[n-2];
     for ( k = n-4 ; k >= 0 ; k-- )
@@ -1804,7 +2127,7 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
     if ( C != A && C != B ) {
     
         /* Clean-up C if needed. */
-        if ( !( C->flags & fun_flag_init ) || C->n < N )
+        if ( !( C->flags & fun_flag_init ) || C->size < N )
             if ( fun_init( C , N ) < 0 )
                 return error(fun_err);
             
@@ -1823,17 +2146,31 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
             return error(fun_err_malloc);
         bzero( temp , sizeof(double) * (A->n + B->n - 1) );
         
-        /* Allocate the new values. */
-        if ( C->vals.real != NULL )
-            free( C->vals.real );
-        if ( posix_memalign( (void **)&(C->vals.real) , 16 , sizeof(double) * N ) != 0 )
-            return error(fun_err_malloc);
+        /* Is the output fun large enough? */
+        if ( C->size < N ) {
+        
+            /* Allocate the new values. */
+            if ( C->vals.real != NULL )
+                free( C->vals.real );
+            if ( posix_memalign( (void **)&(C->vals.real) , 16 , sizeof(double) * N ) != 0 )
+                return error(fun_err_malloc);
+
+            /* Create the new points. */
+            if ( C->points != NULL )
+                free( C->points );
+            if ( ( C->points = util_chebpts_alloc( N ) ) == NULL )
+                return error(fun_err_malloc);
+                
+            /* Set the new size. */
+            C->size = N;
+                
+            }
             
-        /* Create the new points. */
-        if ( C->points != NULL )
-            free( C->points );
-        if ( ( C->points = util_chebpts_alloc( N ) ) == NULL )
-            return error(fun_err_malloc);
+        /* Otherwise, just need to re-create the points. */
+        else {
+            if ( util_chebpts( N , C->points ) < 0 )
+                return error(fun_err_util);
+            }
                 
         }
 
@@ -1940,7 +2277,7 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
     else {
     
         /* Start by cleaning out B if needed. */
-        if ( !( B->flags & fun_flag_init ) || B->n < A->n + 1 ) {
+        if ( !( B->flags & fun_flag_init ) || B->size < A->n + 1 ) {
             if ( fun_init( B , A->n + 1 ) < 0 )
                 return error(fun_err);
             }
@@ -2040,9 +2377,10 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
     /* A and B are not the same fun. */
     else {
     
-        /* Start by cleaning out B */
-        if ( fun_clean( B ) != fun_err_ok )
-            return error(fun_err);
+        /* Make sure B is the right size. */
+        if ( !( B->flags & fun_flag_init ) || ( B->size < A->n ) )
+            if ( fun_init( B , A->n ) != fun_err_ok )
+                return error(fun_err);
             
         /* Copy the values from A to B */
         B->flags = A->flags;
@@ -2050,12 +2388,6 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
         B->n = A->n;
         B->scale = fabs(w) * A->scale;
         
-        /* Allocate memory in B */
-        if ( posix_memalign( (void **)&(B->vals.real) , 16 , sizeof(double) * B->n ) != 0 ||
-             posix_memalign( (void **)&(B->coeffs.real) , 16 , sizeof(double) * B->n ) != 0 ||
-             ( B->points = (double *)malloc( sizeof(double) * B->n ) ) == NULL )
-            return error(fun_err_malloc);
-            
         /* Copy the scaled values from A. */
         for ( k = 0 ; k < B->n ; k++ ) {
             B->points[k] = A->points[k];
@@ -2131,6 +2463,8 @@ int fun_sub ( struct fun *A , struct fun *B , struct fun *C ) {
  * an inverse DCT (see #util_chebpolyval).
  */
  
+/* TODO: Case where C == b and b->size >= a->n! */
+ 
 int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , struct fun *C ) {
 
     int k;
@@ -2159,7 +2493,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
     if ( C != a && C != b ) {
     
         /* Init C if needed */
-        if ( !( C->flags & fun_flag_init ) || C->n < a->n )
+        if ( !( C->flags & fun_flag_init ) || C->size < a->n )
             if ( fun_init( C , a->n ) < 0 )
                 return error(fun_err);
             
@@ -2265,6 +2599,7 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
             
             /* Set the new length. */
             C->n = a->n;
+            C->size = a->n;
     
             /* Extract the vals from the merged coeffs. */
             free( C->vals.real );

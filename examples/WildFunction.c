@@ -39,7 +39,7 @@ int main ( ) {
 
     struct fun f = FUN_EMPTY, s = FUN_EMPTY;
     double sum, maxx, maxy;
-    int j;
+    int j, k;
 
     // sin(pi*x).
     int sinpix ( const double *x , unsigned int N , double *v , void *data ) {
@@ -67,43 +67,48 @@ int main ( ) {
             }
         return 0;
         }
+        
+    /* Main loop. */
+    for ( k = 0 ; k < 10 ; k++ ) {
 
-    // Make starting funs.
-    fun_create_vec( &f , &sinpix , -1.0 , 1.0 , NULL );
-    fun_copy( &f , &s);
+        // Make starting funs.
+        fun_create_vec( &f , &sinpix , -1.0 , 1.0 , NULL );
+        fun_copy( &f , &s);
 
-    // Iterative definition.
-    for ( j = 1 ; j <= 15 ; j++ ) { 
-//        f = (3/4)*(1 - 2*f.^4);
-/*
-        fun_comp_vec( &f , &pow4 , &f , NULL );   // f -> f^4
-        fun_scale( &f , -2.0 , &f );              // f -> -2*f
-        fun_add_const( &f , 1.0 , &f );           // f -> f+1
-        fun_scale( &f , 3.0/4.0 , &f );           // f -> 3/4*f
-*/
-        fun_comp_vec( &f , &thefun , &f , NULL ); // f -> (3/4)*(1-2*f^4)
-//        s = s + f;
-        fun_add( &s , &f , &s );
+        // Iterative definition.
+        for ( j = 1 ; j <= 15 ; j++ ) { 
+    //        f = (3/4)*(1 - 2*f.^4);
+    /*
+            fun_comp_vec( &f , &pow4 , &f , NULL );   // f -> f^4
+            fun_scale( &f , -2.0 , &f );              // f -> -2*f
+            fun_add_const( &f , 1.0 , &f );           // f -> f+1
+            fun_scale( &f , 3.0/4.0 , &f );           // f -> 3/4*f
+    */
+            fun_comp_vec( &f , &thefun , &f , NULL ); // f -> (3/4)*(1-2*f^4)
+    //        s = s + f;
+            fun_add( &s , &f , &s );
+            }
+
+        // Plot.
+        /* if ( fun_gnuplot( &s ) < 0 )
+            errs_dump( stdout ); */
+
+        // Integrate s
+        sum = fun_integrate( &s );
+        printf("length(s) = %i\n", s.n);
+        printf("sum(s) = %16.16e\n", sum);
+        printf("err from MATLAB/Chebfun = %16.16e\n", fabs(sum-15.265483825826742));
+
+        // Maximum of s
+        fun_max( &s , &maxy , &maxx );
+        printf("max(s) = %16.16e\n", maxy);
+        printf("err from MATLAB/Chebfun = %16.16e\n", fabs(maxy-9.295487828334499));
+
+	    // Clean.
+	    fun_clean( &f );
+	    fun_clean( &s );
+        
         }
-   
-    // Plot.
-    if ( fun_gnuplot( &s ) < 0 )
-        errs_dump( stdout );
-
-    // Integrate s
-    sum = fun_integrate( &s );
-    printf("length(s) = %i\n", s.n);
-    printf("sum(s) = %16.16e\n", sum);
-    printf("err from MATLAB/Chebfun = %16.16e\n", fabs(sum-15.265483825826742));
-
-    // Maximum of s
-    fun_max( &s , &maxy , &maxx );
-    printf("max(s) = %16.16e\n", maxy);
-    printf("err from MATLAB/Chebfun = %16.16e\n", fabs(maxy-9.295487828334499));
-
-	// Clean.
-	fun_clean( &f );
-	fun_clean( &s );
 	
     // All is well.
     return 0;

@@ -44,18 +44,19 @@
 int chebtest_roots ( char **name ) {
 
     struct fun x = FUN_EMPTY, p = FUN_EMPTY;
-    double v[2] = { 1.0 , 20.0 }, roots[20], temp;
+    double v[2] = { 0.0 , 21.0 }, roots[20], temp;
     int j, k, nroots;
     
     /* Set the function name. */
     *name = "roots";
     
     /* Create x. */
-    if ( fun_create_vals( &x , v , 1.0 , 20.0 , 2 ) < 0 )
+    if ( fun_create_vals( &x , v , 0.0 , 21.0 , 2 ) < 0 )
         return FAIL;
         
     /* Create an initial, constant p. */
-    if ( fun_create_vals( &p , v , 1.0 , 20.0 , 1 ) < 0 )
+    temp = 1.0;
+    if ( fun_create_vals( &p , &temp , 0.0 , 21.0 , 1 ) < 0 )
         return FAIL;
         
     /* Loop and add roots to p. */
@@ -90,7 +91,7 @@ int chebtest_roots ( char **name ) {
                 
     /* Check the correctnes of the roots. */
     for ( k = 0 ; k < 20 ; k++ )
-        if ( fabs( roots[k] - (k+1) ) > 1.0e-8 )
+        if ( fabs( roots[k] - (k+1) ) > 1.0e-7 )
             return FAIL;
     
     /* All passed... */
@@ -365,10 +366,6 @@ int chebtest_prolong ( char **name ) {
     for ( k = 0 ; k < f2.n ; k++ )
         if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;
-        
-    /* All passed... */
-    fun_clean(&f1); fun_clean(&f2); fun_clean(&f3);
-    return PASS;
         
     /* Copy f1 into f2. */
     if ( fun_copy( &f1 , &f2 ) < 0 )
