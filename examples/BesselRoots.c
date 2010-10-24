@@ -35,7 +35,7 @@
 int main ( ) {
 
     struct fun x = FUN_EMPTY, f = FUN_EMPTY;
-    double *roots;
+    double roots[320];
     int nroots;
 
     // The Bessel function.

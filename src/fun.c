@@ -102,6 +102,40 @@ int fun_create_x ( struct fun *fun , double a , double b ) {
     return fun_err_ok;
     
     }
+    
+    
+/**
+ * @brief Compose a #fun with another #fun
+ *
+ * @param A The input #fun.
+ * @param op A second #fun to compose @c A with.
+ * @param B The output #fun, may be the same as @c A.
+ *
+ * @return #fun_err_ok or < 0 on error (see #fun_err).
+ *
+ * @sa fun_comp_vec
+ */
+ 
+int fun_comp_fun ( struct fun *A , struct fun *op , struct fun *B ) {
+
+    /* Wrapper function. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        return fun_eval_vec( op , x , N , v );
+        }
+
+    /* Check inputs. */
+    if ( A == NULL || op == NULL || B == NULL )
+        return error(fun_err_null);
+    if ( !( A->flags & fun_flag_init ) || !( op->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+        
+    /* Refer to fun_comp_vec. */
+    if ( fun_comp_vec( A , &thefun , B , NULL ) < 0 )
+        return error(fun_err);
+    else
+        return fun_err_ok;
+
+    }
 
 
 /**
@@ -169,21 +203,45 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
         if ( N > A->n ) {
             memcpy( coeffs, A->coeffs.real , sizeof(double) * A->n );
             bzero( &(coeffs[A->n]) , sizeof(double) * (N - A->n) );
-            if ( util_chebpolyval( coeffs , N , v ) < 0 )
+            if ( util_chebpolyval( coeffs , N , x ) < 0 )
                 return error(fun_err_util);
             }
         else if ( A->n > N ) {
             if ( util_chebpts( N , x ) < 0 )
                 return error(fun_err_util);
-            if ( fun_eval_clenshaw_vec( A , x , N , v ) < 0 )
+            if ( fun_eval_clenshaw_vec( A , x , N , x ) < 0 )
                 return error(fun_err);
             }
         else
-            memcpy( v , A->vals.real , sizeof(double) * N );
+            memcpy( x , A->vals.real , sizeof(double) * N );
                 
-        /* Evaluate the op. */
-        if ( (*op)( v , N , v , data ) < 0 )
-            return error(fun_err_fx);
+        /* If resampling is on or this is the first run, just evaluate the op. */
+        if ( N == chebopts_opts->minsamples || chebopts_opts->flags & chebopts_flag_resampling ) {
+        
+            /* Evaluate the op. */
+            if ( (*op)( x , N , v , data ) < 0 )
+                return error(fun_err_fx);
+                
+            }
+            
+        /* Otherwise, we only need to re-evaluate at the interlacing points. */
+        else {
+        
+            /* Wrap up the points. */
+            for ( k = 0 ; k < N/2 ; k++ )
+                x[k] = x[2*k+1];
+                
+            /* Evaluate op at the points and store the result in the second half of v. */
+            if ( (*op)( x , N/2 , &(x[N/2]) , data ) < 0 )
+                return error(fun_err_fx);
+                
+            /* Unwrap the results into v. */
+            for ( k = N/2 ; k > 0 ; k-- ) {
+                v[2*k] = v[k];
+                v[2*k-1] = x[N/2+k-1];
+                }
+                
+            }
 
         /* Update the scale. */
         for ( k = 0 ; k < N ; k++ )
@@ -194,7 +252,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
         if ( util_chebpoly( v , N , coeffs ) < 0 )
             return error(fun_err_util);
             
-        /* Compute the coeffs from the values. */
+        /* Get a fresh set of points. */
         if ( util_chebpts( N , x ) < 0 )
             return error(fun_err_util);
 
@@ -2674,7 +2732,7 @@ double fun_eval ( struct fun *fun , double x ) {
  * @sa fun_eval_clenshaw, fun_eval, fun_eval_bary, fun_eval_bary_vec, fun_eval_clenshaw_vec
  */
  
-int fun_eval_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
+int fun_eval_vec ( struct fun *fun , const double *x , unsigned int m , double *out ) {
     
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
@@ -2757,7 +2815,7 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
  * @sa fun_eval_clenshaw, fun_eval, fun_eval_vec
  */
 
-int fun_eval_clenshaw_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
+int fun_eval_clenshaw_vec ( struct fun *fun , const double *x , unsigned int m , double *out ) {
 
     int j, k;
     double yn, ynp1 = 0.0, ynp2, xj, mi, ih;
@@ -2892,7 +2950,7 @@ double fun_eval_bary ( struct fun *fun , double x ) {
  * @sa fun_eval_clenshaw, fun_eval_bary, fun_eval_vec, fun_eval_clenshaw_vec
  */
  
-int fun_eval_bary_vec ( struct fun *fun , double *x , unsigned int m , double *out ) {
+int fun_eval_bary_vec ( struct fun *fun , const double *x , unsigned int m , double *out ) {
 
     int j, k;
     double w, u, v, xj, mi, ih;
