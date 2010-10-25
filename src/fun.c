@@ -511,6 +511,8 @@ int fun_gnuplot ( struct fun *f1 ) {
  * @return #fun_err_ok or < 0 on error (see #fun_err).
  */
  
+/* TODO: Should crash if A->n == 0! */
+ 
 int fun_add_const ( struct fun *A , double x , struct fun *B ) {
 
     int k;
@@ -1220,7 +1222,7 @@ int _fun_simplify ( struct fun *fun , double tol ) {
 int fun_roots( struct fun *fun , double *roots ) {
 	
 	int k, nroots;
-	double scl;
+	double m, h;
     
     /* Check for the usual suspects. */
     if ( fun == NULL || roots == NULL )
@@ -1232,13 +1234,14 @@ int fun_roots( struct fun *fun , double *roots ) {
 	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
         return error(fun_err);
         
-    /* Get scl. */
-    scl = 0.5 * (fun->b - fun->a);
+    /* Get m and h for the interval. */
+    m = 0.5 * (fun->a + fun->b);
+    h = 0.5 * (fun->b - fun->a);
 
     /* Scale the roots to the correct interval if needed. */
 	if ( fun->a != -1.0 || fun->b != 1.0 )
 	    for ( k = 0 ; k < nroots ; k++ )
-		    roots[k] = ( 1.0 - roots[k] ) * scl + fun->a;
+		    roots[k] = m + roots[k] * h;
 
 	return nroots;
     
