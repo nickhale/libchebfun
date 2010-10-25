@@ -1227,13 +1227,13 @@ int fun_roots( struct fun *fun , double *roots ) {
         return error(fun_err_null);
     if ( !( fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
-        
-    /* Get scl once we're sure fun isn't bogus. */
-    scl = 0.5 * (fun->b - fun->a);
 
     /* Call fun_roots_unit. */
 	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
         return error(fun_err);
+        
+    /* Get scl. */
+    scl = 0.5 * (fun->b - fun->a);
 
     /* Scale the roots to the correct interval if needed. */
 	if ( fun->a != -1.0 || fun->b != 1.0 )
@@ -1316,7 +1316,11 @@ int fun_roots_unit_backup ( struct fun *fun , double *roots ) {
         /* Trivial linear case. */
         else if ( N == 1 ) {
             tmp = -fun->coeffs.real[0] / fun->coeffs.real[1] * 0.5 * ( fun->a + fun->b );
-            if ( tmp > -1.0 - tol && tmp < 1.0 + tol) {
+            if ( fabs(tmp) < 1.0 + tol) {
+                if ( tmp < -1.0 )
+                    tmp = -1.0;
+                if ( tmp > 1.0 )
+                    tmp = 1.0;
                 roots[0] = tmp;
                 return 1;
                 }
@@ -1381,9 +1385,13 @@ int fun_roots_unit_backup ( struct fun *fun , double *roots ) {
 
         /* Count the number of valid roots and store them. */
 		for (j = ok ; j < N ; j++)
-			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol)
+			if (fabs(ri[j]) < tol && rr[j] >= -1.0-tol && rr[j] <= 1.0+tol) {
+                if ( rr[j] < -1.0 )
+                    rr[j] = -1.0;
+                else if ( rr[j] > 1.0 )
+                    rr[j] = 1.0; 
                 roots[nroots++] = rr[j];  
-                              
+                }
 		}
         
     /* Otherwise, recurse. */
@@ -1454,7 +1462,7 @@ int fun_roots_unit_backup ( struct fun *fun , double *roots ) {
 
 int fun_roots_unit ( struct fun *fun , double *roots ) {
 
-    double c = -0.004849834917525, tail_max, temp, *v;
+    double c = -0.004849834917525, tail_max, temp, *v, hscl;
     int nroots;
     int j, k;
     static double *Tleft = NULL, *Tright = NULL;
@@ -1552,9 +1560,8 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		    if ( ok < 0 )
 			    return error(fun_err_lapack);
 
-            /* THIS SHOULD INVOLVE A DECREASING HORZONTAL SCALE AS IN MATLAB/CHEBFUN */
-
             /* Count the number of valid roots and store them. */
+            /* Note, imag tol in Matlab is 0.5*tol ... */
 		    for (j = ok ; j < N ; j++)
 			    if ( fabs(ri[j]) < tol && rr[j] >= -(1.0+tol) && rr[j] <= (1.0+tol) )
                     roots[nroots++] = rr[j];  
@@ -1613,14 +1620,15 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 
             /* Recurse on the left if Nl > 0. */
             if ( Nl > 0 ) {
-                if ( ( nrootsL = fun_roots_unit_rec( cleft , Nl , h/2 , roots ) ) < 0 )
+                if ( ( nrootsL = fun_roots_unit_rec( cleft , Nl , 2.0*hscl/(c+1.0) , roots ) ) < 0 )
                     return error(fun_err);
                 w = 0.5 * (1.0 + c);
                 for ( nroots = 0 ; nroots < nrootsL ; nroots++ )
                     roots[nroots] = -1.0 + w * (roots[nroots] + 1.0);
                 }
+            /* Recurse on the right if Nr > 0. */
             if ( Nr > 0 ) {
-                if ( ( nrootsR = fun_roots_unit_rec( cright , Nr , h/2 , &(roots[nrootsL]) ) ) < 0 )
+                if ( ( nrootsR = fun_roots_unit_rec( cright , Nr , 2.0*hscl/(1.0-c) , &(roots[nrootsL]) ) ) < 0 )
                     return error(fun_err);
                 w = 0.5 * (1.0 - c);
                 for ( nroots = nrootsL ; nroots < nrootsL + nrootsR ; nroots++ )
@@ -1733,9 +1741,14 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     if ( tail_max > 1.0e12 )
         tail_max = 1.0e12;
     tail_max *= DBL_EPSILON;
-    
+
+    /* Get the horizontal scale (following Matlab defn). */
+    hscl = fabs(fun->a);
+    if ( fabs(fun->b) > hscl )
+        hscl = fabs(fun->b);
+
     /* Call the recursion. */
-    if ( ( nroots = fun_roots_unit_rec( fun->coeffs.real , fun->n , (fun->b - fun->a) , roots ) ) < 0 )
+    if ( ( nroots = fun_roots_unit_rec( fun->coeffs.real , fun->n , 2.0*hscl/(fun->b - fun->a) , roots ) ) < 0 )
         return error(fun_err);
         
     /* To the pub!. */
