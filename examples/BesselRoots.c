@@ -35,8 +35,8 @@
 int main ( ) {
 
     struct fun x = FUN_EMPTY, f = FUN_EMPTY;
-    double roots[320];
-    int nroots;
+    double roots[320], temp;
+    int nroots, j, k;
 
     // The Bessel function.
     int thefun ( const double *x , unsigned int N , double *v , void *data ) {
@@ -79,8 +79,15 @@ int main ( ) {
 //    printf("The length of f is %i\n",f.n);
     
     // Find the roots.
-    nroots = fun_roots( &f , roots );
+    nroots = fun_roots_sort( &f , roots );
     printf("The are %i roots of the Bessel function in [%9.9e %9.9e]\n",nroots,f.a,f.b);
+
+    // Show the first 10    
+    printf("Here are the first 10:\n");
+    for ( k = 0 ; k < 10 ; k++ )
+        printf("r[%i] = %20.18e\n", k , roots[k]);
+    for ( k = 0 ; k < 10 ; k++ )
+        printf("f(r[%i]) = %20.18e \n", k , fun_eval( &f , roots[k] ) );
 
 	// Clean.
 	fun_clean( &x );

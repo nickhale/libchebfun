@@ -1210,6 +1210,46 @@ int _fun_simplify ( struct fun *fun , double tol ) {
 
 
 /**
+ * @brief Compute the sorted roots of a fun.
+ *
+ * @param fun The #fun to find roots of.
+ * @param roots A pointer to an array of double of length at least
+ *      equal to the length of @c fun - 1. This is where the roots will be stored.
+ *
+ * @return The number of roots found or < 0 if an error occured.
+ * 
+ * @sa fun_roots 
+ */
+ 
+int fun_roots_sort( struct fun *fun , double *roots ) {
+	
+	int k, nroots;
+	double m, h;
+    
+    /* Check for the usual suspects. */
+    if ( fun == NULL || roots == NULL )
+        return error(fun_err_null);
+    if ( !( fun->flags & fun_flag_init ) )
+        return error(fun_err_uninit);
+
+    /* Call fun_roots_unit (with the sort flag). */
+	if ( ( nroots = fun_roots_unit( fun , roots , 1 ) ) < 0 )
+        return error(fun_err);
+        
+    /* Get m and h for the interval. */
+    m = 0.5 * (fun->a + fun->b);
+    h = 0.5 * (fun->b - fun->a);
+
+    /* Scale the roots to the correct interval if needed. */
+	if ( fun->a != -1.0 || fun->b != 1.0 )
+	    for ( k = 0 ; k < nroots ; k++ )
+		    roots[k] = m + roots[k] * h;
+
+	return nroots;
+    
+	}
+
+/**
  * @brief Compute the roots of a fun.
  *
  * @param fun The #fun to find roots of.
@@ -1217,6 +1257,11 @@ int _fun_simplify ( struct fun *fun , double tol ) {
  *      equal to the length of @c fun - 1. This is where the roots will be stored.
  *
  * @return The number of roots found or < 0 if an error occured.
+ * 
+ * @sa fun_roots 
+ *
+ * Note, if the roots need to be sorted, it is more efficient to 
+ * call fun_roots_sort, as they are they sorted during calculation.
  */
  
 int fun_roots( struct fun *fun , double *roots ) {
@@ -1230,8 +1275,8 @@ int fun_roots( struct fun *fun , double *roots ) {
     if ( !( fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
 
-    /* Call fun_roots_unit. */
-	if ( ( nroots = fun_roots_unit( fun , roots ) ) < 0 )
+    /* Call fun_roots_unit (without the sort flag). */
+	if ( ( nroots = fun_roots_unit( fun , roots , 0 ) ) < 0 )
         return error(fun_err);
         
     /* Get m and h for the interval. */
@@ -1254,12 +1299,15 @@ int fun_roots( struct fun *fun , double *roots ) {
  * @param fun The #fun to find roots of.
  * @param roots A pointer to an array of double of length at least
  *      equal to the length of @c fun - 1. This is where the roots will be stored.
+ * @param sort Determines whether the roots should be sorted or not. 
+ *      sort == 1 will sort, sort == 0 will not.
  *
  * @return The number of roots found or < 0 if an error occurred.
  *
+ * TODO : Implement a quicksort for sorting the roots.
  */
  
-int fun_roots_unit ( struct fun *fun , double *roots ) {
+int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
 
     double c = -0.004849834917525, tail_max, temp, *v, hscl;
     int nroots;
@@ -1271,13 +1319,13 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
     
     
     /* Recursive routine that works only on the coefficients. */
-    int fun_roots_unit_rec ( double *coeffs , unsigned int N , double h , double *roots ) {
+    int fun_roots_unit_rec ( double *coeffs , unsigned int N , double h , double *roots , int sort ) {
     
         int j, k;
 	    int ilo, ihi, ldh, ldz, lwork, ok;
         int Nl, Nr, nrootsL = 0, nrootsR = 0, nroots = 0;
 	    char job = 'E', compz = 'N';
-        double tol, cN, w;
+        double tol, cN, w, temp;
         double *cleft, *cright, *rr, *ri, *work, *A, z, *v;
         
         /* Is the degree small enough for a colleague matrix approach? */
@@ -1364,8 +1412,18 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 		    for (j = ok ; j < N ; j++)
 			    if ( fabs(ri[j]) < tol && rr[j] >= -(1.0+tol) && rr[j] <= (1.0+tol) )
                     roots[nroots++] = rr[j];  
+
+            /* Sort if required. */
+            if ( sort == 1 )
+                for ( j = 0 ; j < nroots ; j++ )
+                    for ( k = j + 1 ; k < nroots ; k++ )
+                        if ( roots[j] > roots[k] ) {
+                            temp = roots[j];
+                            roots[j] = roots[k];
+                            roots[k] = temp;
+                            }
                               
-            }
+            }       
             
         /* Otherwise, split and recurse. */
         else {
@@ -1419,7 +1477,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
 
             /* Recurse on the left if Nl > 0. */
             if ( Nl > 0 ) {
-                if ( ( nrootsL = fun_roots_unit_rec( cleft , Nl , 2.0*hscl/(c+1.0) , roots ) ) < 0 )
+                if ( ( nrootsL = fun_roots_unit_rec( cleft , Nl , 2.0*hscl/(c+1.0) , roots , sort ) ) < 0 )
                     return error(fun_err);
                 w = 0.5 * (1.0 + c);
                 for ( nroots = 0 ; nroots < nrootsL ; nroots++ )
@@ -1427,7 +1485,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
                 }
             /* Recurse on the right if Nr > 0. */
             if ( Nr > 0 ) {
-                if ( ( nrootsR = fun_roots_unit_rec( cright , Nr , 2.0*hscl/(1.0-c) , &(roots[nrootsL]) ) ) < 0 )
+                if ( ( nrootsR = fun_roots_unit_rec( cright , Nr , 2.0*hscl/(1.0-c) , &(roots[nrootsL] ) , sort ) ) < 0 )
                     return error(fun_err);
                 w = 0.5 * (1.0 - c);
                 for ( nroots = nrootsL ; nroots < nrootsL + nrootsR ; nroots++ )
@@ -1547,7 +1605,7 @@ int fun_roots_unit ( struct fun *fun , double *roots ) {
         hscl = fabs(fun->b);
 
     /* Call the recursion. */
-    if ( ( nroots = fun_roots_unit_rec( fun->coeffs.real , fun->n , 2.0*hscl/(fun->b - fun->a) , roots ) ) < 0 )
+    if ( ( nroots = fun_roots_unit_rec( fun->coeffs.real , fun->n , 2.0*hscl/(fun->b - fun->a) , roots , sort ) ) < 0 )
         return error(fun_err);
         
     /* To the pub!. */
