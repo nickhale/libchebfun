@@ -42,19 +42,23 @@ AC_PROG_MAKE_SET
 AC_HEADER_STDC
 
 # Make sure LAPACK and BLAS are installed
-AC_CHECK_LIB(blas,dgemv_,,AC_MSG_ERROR([BLAS not found.
-    Make sure you have the library and header files installed
-    or use CPPFLAGS and LDFLAGS if the library is installed in a
-    non-standard location.]))
-AC_CHECK_LIB(lapack,dgbsv_,,AC_MSG_ERROR([LAPACK not found.
-    Make sure you have the library and header files installed
-    or use CPPFLAGS and LDFLAGS if the library is installed in a
-    non-standard location.]))
-AC_CHECK_HEADER(cblas.h,,AC_MSG_ERROR([BLAS headers not found.
-    Make sure you have the library and header files installed
-    or use CPPFLAGS and LDFLAGS if the library is installed in a
-    non-standard location.]))
-AC_CHECK_HEADER(clapack.h,,AC_MSG_ERROR([LAPACK headers not found.
+# AC_CHECK_LIB(blas,dgemv_,,AC_MSG_ERROR([BLAS not found.
+#     Make sure you have the library and header files installed
+#     or use CPPFLAGS and LDFLAGS if the library is installed in a
+#     non-standard location.]))
+# AC_CHECK_LIB(lapack,dhseqr_,,AC_MSG_ERROR([LAPACK not found.
+#     Make sure you have the library and header files installed
+#     or use CPPFLAGS and LDFLAGS if the library is installed in a
+#     non-standard location.]))
+# AC_CHECK_HEADER(cblas.h,,AC_MSG_ERROR([BLAS headers not found.
+#     Make sure you have the library and header files installed
+#     or use CPPFLAGS and LDFLAGS if the library is installed in a
+#     non-standard location.]))
+# AC_CHECK_HEADER(clapack.h,,AC_MSG_ERROR([LAPACK headers not found.
+#     Make sure you have the library and header files installed
+#     or use CPPFLAGS and LDFLAGS if the library is installed in a
+#     non-standard location.]))
+AX_LAPACK([],AC_MSG_ERROR([LAPACK not found.
     Make sure you have the library and header files installed
     or use CPPFLAGS and LDFLAGS if the library is installed in a
     non-standard location.]))

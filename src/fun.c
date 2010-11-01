@@ -1303,8 +1303,11 @@ int fun_roots( struct fun *fun , double *roots ) {
  *      sort == 1 will sort, sort == 0 will not.
  *
  * @return The number of roots found or < 0 if an error occurred.
- *
- * TODO : Implement a quicksort for sorting the roots.
+ */
+
+/* TODO : Implement a quicksort for sorting the roots.
+ * TODO: Changed the minimum nr. of coefficients for the eigenvalue solver
+ *          to N <= 20 until we get a decent lapack to link against.
  */
  
 int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
@@ -1329,7 +1332,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         double *cleft, *cright, *rr, *ri, *work, *A, z, *v;
         
         /* Is the degree small enough for a colleague matrix approach? */
-        if ( N <= 100 ) {
+        if ( N <= 20 ) {
         
             /* Set the horizontal tolerance for roots inside the interval. */
             tol = 100.0 * h * DBL_EPSILON;

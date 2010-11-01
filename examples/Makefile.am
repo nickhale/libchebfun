@@ -26,28 +26,28 @@ bin_PROGRAMS = fun_test pedro_test nick_test chebtest BesselRoots WildFunction
 
 # Sources for fun_test
 fun_test_SOURCES = fun_test.c
-fun_test_LDADD = ../src/.libs/libchebfun.a
+fun_test_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for pedro_test
 pedro_test_SOURCES = pedro_test.c
-pedro_test_LDADD = ../src/.libs/libchebfun.a
+pedro_test_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for nick_test
 nick_test_SOURCES = nick_test.c
-nick_test_LDADD = ../src/.libs/libchebfun.a
+nick_test_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for chebtest
 chebtest_SOURCES = chebtest.c
-chebtest_LDADD = ../src/.libs/libchebfun.a
+chebtest_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for WildFunction
 WildFunction_SOURCES = WildFunction.c
-WildFunction_LDADD = ../src/.libs/libchebfun.a -lprofiler
-# WildFunction_LDADD = ../src/.libs/libchebfun.a
+# WildFunction_LDADD = ../src/.libs/libchebfun.a -lprofiler $(LAPACK_LIBS) $(BLAS_LIBS)
+WildFunction_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for BesselRoots
 BesselRoots_SOURCES = BesselRoots.c
-BesselRoots_LDADD = ../src/.libs/libchebfun.a
+BesselRoots_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 
 
