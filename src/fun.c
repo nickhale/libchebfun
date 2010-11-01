@@ -1312,6 +1312,7 @@ int fun_roots( struct fun *fun , double *roots ) {
  
 int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
 
+    const int split = 20;
     double c = -0.004849834917525, tail_max, temp, *v, hscl;
     int nroots;
     int j, k;
@@ -1332,7 +1333,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         double *cleft, *cright, *rr, *ri, *work, *A, z, *v;
         
         /* Is the degree small enough for a colleague matrix approach? */
-        if ( N <= 20 ) {
+        if ( N <= split ) {
         
             /* Set the horizontal tolerance for roots inside the interval. */
             tol = 100.0 * h * DBL_EPSILON;
@@ -1513,7 +1514,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         
     /* Check if the coefficient matrices Tleft and Tright have been
         computed and are the right size. */
-    if ( fun->n > 100 && Tleft == NULL ) {
+    if ( fun->n > split && Tleft == NULL ) {
     
         /* printf("fun_roots_unit: building transformation matrices... "); fflush(stdout); */
     
