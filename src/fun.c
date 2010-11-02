@@ -508,8 +508,6 @@ int fun_gnuplot ( struct fun *f1 ) {
  * @return #fun_err_ok or < 0 on error (see #fun_err).
  */
  
-/* TODO: Should crash if A->n == 0! */
- 
 int fun_add_const ( struct fun *A , double x , struct fun *B ) {
 
     int k;
@@ -2365,8 +2363,6 @@ int fun_sub ( struct fun *A , struct fun *B , struct fun *C ) {
  * are added to those of the longer and the values are re-computed using
  * an inverse DCT (see #util_chebpolyval).
  */
- 
-/* TODO: Case where C == b and b->size >= a->n! */
  
 int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , struct fun *C ) {
 
