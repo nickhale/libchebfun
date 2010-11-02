@@ -223,10 +223,8 @@ double * util_diffmat ( unsigned int N ) {
  *  returns the expected number of points necessary for its
  *  representation.
  *
- * @param x Pointer to an array of double values containing the
- *      interpolation nodes.
  * @param v Pointer to an array of double values containing the
- *      function values at the nodes.
+ *      function values at the Chebyshev nodes.
  * @param coeffs Pointer to an array of double values containing
  *      the Chebyshev coefficients of the interpolation.
  * @param N Number of nodes.
@@ -240,13 +238,13 @@ double * util_diffmat ( unsigned int N ) {
  
 /* TODO: add sampletest here? */
  
-int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps ) {
+int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps ) {
 
     int k, tail;
-    double temp, tail_max, diff_max;
+    double temp, tail_max, diff_max, dx, pin, wc, ws;
     
     /* The usual checks and balances. */
-    if ( x == NULL || v == NULL || coeffs == NULL )
+    if ( v == NULL || coeffs == NULL )
         return error(util_err_null);
         
     /* Get the expected tail length. */
@@ -259,10 +257,12 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
 
     /* Get the maximum tail magnitude. */
     diff_max = 0.0;
+    pin = M_PI / (N - 1); wc = cos( pin ) - 1.0; ws = sin( pin );
     for ( k = 1 ; k < N ; k++ ) {
         temp = fabs( v[k] - v[k-1] );
-        if ( fabs( x[k] - x[k-1] ) > 2 * DBL_EPSILON )
-            temp /= fabs( x[k] - x[k-1] );
+        dx = cos( pin * k ) * wc + sin( pin * k ) * ws;
+        if ( dx > 2 * DBL_EPSILON )
+            temp /= dx;
         else
             temp /= 2 * DBL_EPSILON;
         if ( temp > diff_max )
@@ -290,7 +290,6 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
         /* Set the coefficients and values. */
         coeffs[0] = 0.0;
         v[0] = 0.0;
-        x[0] = 0.0;
     
         }
     
@@ -305,10 +304,6 @@ int util_simplify ( double *x , double *v , double *coeffs , unsigned int N , do
         if ( util_chebpolyval( coeffs , N , v ) < 0 )
             return util_err;
             
-        /* Get the new nodes. */
-        if ( util_chebpts( N , x ) < 0 )
-            return util_err;
-    
         }
         
     /* Otherwise, don't change anything. */

@@ -186,8 +186,11 @@ int chebtest_restrict ( char **name ) {
         return FAIL;
     
     /* Compare the results. */
+    /* for ( k = 0 ; k < f2.n ; k++ )
+        printf("chebtest_restrict: v[%i]=%e, f2.vals[%i]=%e, diff=%e\n",
+            k, v[k], k, f2.vals.real[k], fabs(v[k]-f2.vals.real[k]) ); */
     for ( k = 0 ; k < f2.n ; k++ ) {
-        if ( fabs( v[k] - f2.vals.real[k] ) > 10 * f1.scale * DBL_EPSILON )
+        if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;
         }
     
@@ -210,7 +213,7 @@ int chebtest_restrict ( char **name ) {
     
     /* Compare the results. */
     for ( k = 0 ; k < f2.n ; k++ ) {
-        if ( fabs( v[k] - f2.vals.real[k] ) > 10 * f1.scale * DBL_EPSILON )
+        if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;
         }
     
@@ -324,7 +327,7 @@ int chebtest_prolong ( char **name ) {
 
     struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY, f3 = FUN_EMPTY;
     int k;
-    double *v;
+    double *v, *x;
     
     /* The function for which to create a chebfun. */
     int thefun ( const double *x , unsigned int N , double *v , void *data ) {
@@ -358,11 +361,15 @@ int chebtest_prolong ( char **name ) {
     /* Check if the prolonged function matches at the nodes. */
     if ( ( v = (double *)alloca( sizeof(double) * f2.n ) ) == NULL )
         return FAIL;
-    if ( fun_eval_vec( &f1 , f2.points , f2.n , v ) < 0 )
+    if ( ( x = (double *)alloca( sizeof(double) * f2.n ) ) == NULL )
+        return FAIL;
+    if ( util_chebpts( f2.n , x ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f1 , x , f2.n , v ) < 0 )
         return FAIL;
     /* for ( k = 0 ; k < f2.n ; k++ )
         printf("chebtest_prolong: x[%i]=%e, v[%i]=%e, f2[%i]=%e\n",
-            k,f2.points[k],k,v[k],k,f2.vals.real[k]); */
+            k,x[k],k,v[k],k,f2.vals.real[k]); */
     for ( k = 0 ; k < f2.n ; k++ )
         if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;
@@ -390,11 +397,11 @@ int chebtest_prolong ( char **name ) {
         return FAIL;
         
     /* Check if the prolonged function matches at the nodes. */
-    if ( fun_eval_vec( &f1 , f2.points , f2.n , v ) < 0 )
+    if ( fun_eval_vec( &f1 , x , f2.n , v ) < 0 )
         return FAIL;
     /* for ( k = 0 ; k < f2.n ; k++ )
         printf("chebtest_prolong: x[%i]=%e, v[%i]=%e, f2[%i]=%e\n",
-            k,f2.points[k],k,v[k],k,f2.vals.real[k]); */
+            k,x[k],k,v[k],k,f2.vals.real[k]); */
     for ( k = 0 ; k < f2.n ; k++ )
         if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;

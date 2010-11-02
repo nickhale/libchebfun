@@ -92,10 +92,6 @@ int fun_create_x ( struct fun *fun , double a , double b ) {
     fun->coeffs.real[0] = 0.5*(b+a);
     fun->coeffs.real[1] = 0.5*(b-a);
 
-    /* Assign the points. */
-    fun->points[0] = 1.0;
-    fun->points[1] = -1.0;
-       
     /* Update the scale */
     a = fabs(a); b = fabs(b);
     if ( a > b )
@@ -257,12 +253,8 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
         if ( util_chebpoly( v , N , coeffs ) < 0 )
             return error(fun_err_util);
             
-        /* Get a fresh set of points. */
-        if ( util_chebpts( N , x ) < 0 )
-            return error(fun_err_util);
-
         /* Check convergence of the coefficients. */
-        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
+        if ( ( N_new = util_simplify( v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
             return fun_err_util;
 
         /* TODO: Sampletest? */
@@ -283,19 +275,12 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
         } /* Main loop. */
         
     /* Allocate the data inside the fun to the correct size. */
-    if ( !( B->flags & fun_flag_init ) || B->size < N ) {
-        if ( _fun_alloc( B , N ) < 0 )
-            return error(fun_err);
-        }
-    else
-        B->n = N;
+    if ( fun_init( B , N ) < 0 )
+        return error(fun_err);
     
     /* Write the data to the fun. */
     memcpy( B->vals.real , v , sizeof(double) * N );
     memcpy( B->coeffs.real , coeffs , sizeof(double) * N );
-    /* Get the N chebpts. */
-    if ( util_chebpts( N , B->points ) < 0 )
-        return error(fun_err_util);
     B->scale = scale;
     B->a = a;
     B->b = b;
@@ -460,6 +445,11 @@ int fun_gnuplot ( struct fun *f1 ) {
     /* Scaling for the interval [a b] */
     scl1 = (f1->a+f1->b) * 0.5;
     scl2 = (f1->b-f1->a) * 0.5;
+    
+    /* If f1 doesn't have points, get them. */
+    if ( !( f1->flags & fun_flag_haspts ) )
+        if ( fun_points( f1 ) < 0 )
+            return error(fun_err);
 
     /*** LINES ***/
     /* Open the output file. */
@@ -529,6 +519,18 @@ int fun_add_const ( struct fun *A , double x , struct fun *B ) {
         return error(fun_err_null);
     if ( !( A->flags & fun_flag_init ) )
         return error(fun_err_uninit);
+        
+    /* Devious case if A is zero. */
+    if ( A->n == 0 ) {
+        
+        /* Create B from a single value. */
+        if ( fun_create_vals( B , &x , A->a , A->b , 1 ) < 0 )
+            return error(fun_err);
+            
+        /* Already done. */
+        return fun_err_ok;
+        
+        }
 
     /* We have to copy A into B if A != B. */
     if ( A != B ) {
@@ -639,7 +641,6 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
             return error(fun_err);
             
         /* Copy the values from A to B */
-        B->flags = A->flags;
         B->a = A->a; B->b = A->b;
         B->scale = A->scale;
         
@@ -688,28 +689,23 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
     /* Treatment if B == A and the function needs to grow. */
     else if ( N > A->size ) {
     
-        /* Allocate a new coeffs array and fill it with the old coeffs. */
-        if ( posix_memalign( (void **)&c , 16 , sizeof(double) * N ) != 0 )
+        /* Create a temporary buffer to store the coefficients of A. */
+        if ( ( c = (double *)alloca( sizeof(double) * A->n ) ) == NULL )
             return error(fun_err_malloc);
         memcpy( c , A->coeffs.real , sizeof(double) * A->n );
-        bzero( &(c[A->n]) , sizeof(double) * (N - A->n) );
-        free( B->coeffs.real );
-        B->coeffs.real = c;
         
-        /* Generate the new points. */
-        free( B->points );
-        if ( ( B->points = util_chebpts_alloc( N ) ) == NULL )
-            return error(fun_err_util);
+        /* Re-init B to the new length. */
+        if ( fun_init( B , N ) < 0 )
+            return error(fun_err);
     
+        /* Fill B's coeffs with the old coeffs. */
+        memcpy( c , B->coeffs.real , sizeof(double) * A->n );
+        bzero( &(c[B->n]) , sizeof(double) * (N - B->n) );
+        
         /* Re-allocate the vals and generate the new values with the FFT. */
-        free( B->vals.real );
-        if ( ( B->vals.real = util_chebpolyval_alloc( B->coeffs.real , N ) ) == NULL )
+        if ( util_chebpolyval( B->coeffs.real , N , B->vals.real ) < 0 )
             return error(fun_err_util);
             
-        /* Set the new length. */
-        B->n = N;
-        B->size = N;
-
         }
         
     /* Otherwise, B == A and the function is shrinking. */
@@ -735,13 +731,14 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
         if ( util_chebpolyval( A->coeffs.real , N , B->vals.real ) < 0 )
             return error(fun_err_util);
             
-        /* Re-create the points. */
-        if ( util_chebpts( N , B->points ) < 0 )
-            return error(fun_err_util);
-    
         /* Set the new length. */
         B->n = N;
 
+        /* Re-create the points if needed. */
+        if ( chebopts_opts->flags & chebopts_flag_comppts )
+            if ( fun_points( B ) < 0 )
+                return error(fun_err_util);
+    
         }
         
     return fun_err_ok;
@@ -965,19 +962,19 @@ int fun_copy ( struct fun *fun , struct fun *fun2 ) {
     if ( fun == NULL || fun2 == NULL)
         return error(fun_err_null);
         
-    /* If fun2 has not been initialized or is too small, re-init. */
-    if ( !(fun2->flags & fun_flag_init) || fun2->size < fun->n )
-        if ( fun_init( fun2 , fun->n ) < 0 )
-            return error(fun_err);
+    /* Is this trivial? */
+    if ( fun == fun2 )
+        return fun_err_ok;
+        
+    /* Re-init fun2. */
+    if ( fun_init( fun2 , fun->n ) < 0 )
+        return error(fun_err);
             
     /* Copy the data */
-    fun2->flags = fun->flags;
-    fun2->n = fun->n;
     fun2->a = fun->a;
     fun2->b = fun->b;
 
     /* Copy the values. */
-    memcpy( fun2->points , fun->points , sizeof(double) * fun->n );
     memcpy( fun2->vals.real , fun->vals.real , sizeof(double) * fun->n );
     memcpy( fun2->coeffs.real , fun->coeffs.real , sizeof(double) * fun->n );
         
@@ -1007,45 +1004,35 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
     int j;
     
     /* Check inputs. */
-    if ( fun == NULL )
+    if ( fun == NULL || funout == NULL )
         return error(fun_err_null);
     if ( fun->a > A || fun->b < B )
         return error(fun_err_domain);
         
     /* Allocate some memory for the new evaluation points. */
-    if ( ( x = (double *)alloca( sizeof(double) * (fun->n) ) ) == NULL )
+    if ( ( x = (double *)alloca( sizeof(double) * fun->n ) ) == NULL )
         return error(fun_err_malloc);
+        
+    /* Make sure that fun has points! */
+    if ( !( fun->flags & fun_flag_haspts ) )
+        if ( fun_points( fun ) < 0 )
+            return error(fun_err);
 
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
-    for (j = 0 ; j < fun->n ; j++ )
-        //fun->points[j] = B * (fun->points[j] - fun->a) * iba + A * (fun->b - fun->points[j]) * iba;
+    for ( j = 0 ; j < fun->n ; j++ )
         x[j] = B * 0.5 * (fun->points[j] + 1.0) + A * 0.5 * (1.0 - fun->points[j]);
         
-    if (fun == funout) {
+    if (fun != funout) {
 
-        /* Get the restricted values. */
-        fun_eval_clenshaw_vec ( fun , x , fun->n ,  funout->vals.real );
-
-        }
-    else {
-    
         /* Start by cleaning out funout */
-        if ( !( funout->flags & fun_flag_init ) || ( funout->size < fun->n ) ) {
-            if ( fun_init( funout , fun->n ) != fun_err_ok )
-                return error(fun_err);
-            }
-        else {
-            funout->n = fun->n;
-            memcpy( funout->points , fun->points , sizeof(double) * fun->n );
-            }
+        if ( fun_init( funout , fun->n ) != fun_err_ok )
+            return error(fun_err);
                 
-        /* Pass some variables to the new fun */
-        funout->flags = fun->flags;
-
-        /* Get the restricted values. */
-        fun_eval_clenshaw_vec ( fun , x , fun->n , funout->vals.real );
-        
         }
+        
+    /* Get the restricted values. */
+    if ( fun_eval_clenshaw_vec( fun , x , fun->n , funout->vals.real ) < 0 )
+        return error(fun_err);
         
     /* Set the new limits. */
 	funout->a = A;
@@ -1056,9 +1043,8 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_util);
 
     /* Simplify */
-// NEED TO PASS A SENSIBLE TOLERANCE
-//    if ( fun_simplify( funout , 1e-15 ) < 0 )
-//        return error(fun_err);
+    if ( fun_simplify( funout , chebopts_opts->eps ) < 0 )
+       return error(fun_err);
 
     /* Re-scale. */
     _fun_rescale( funout );
@@ -1081,11 +1067,6 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
 
 int fun_simplify ( struct fun *fun , double tol ) {
     
-//	int j;
-    unsigned int N;
-//	double A05, B05;
-    /* struct fun tmpfun = FUN_EMPTY; */
-
     /* Check inputs. */
     if ( fun == NULL )
         return error(fun_err_null);
@@ -1093,19 +1074,11 @@ int fun_simplify ( struct fun *fun , double tol ) {
         return error(fun_err_uninit);
 
     /* Call util_simplify */
-    N = _fun_simplify ( fun , tol );      
-
-    /* Store newdata simplify was successful. */
-    if ( N < fun->n && N > 0) {
-        
-        /* Re-create the fun in the already-allocated memory. */
-        util_chebpolyval( fun->coeffs.real , N , fun->vals.real );
-        util_chebpts( N , fun->points );
-
-        }
+    if ( _fun_simplify ( fun , tol ) < 0 )
+        return error(fun_err);      
 
     /* Sweet. */
-    return N;
+    return fun->n;
 
     }
 
@@ -1117,6 +1090,8 @@ int fun_simplify ( struct fun *fun , double tol ) {
  * @param B The second #fun.
  * @return The 2-norm of their difference.
  */
+ 
+/* TODO: do this in-place. */
 
 double fun_err_norm2 ( struct fun *A , struct fun *B ) {
 
@@ -1203,12 +1178,21 @@ int _fun_simplify ( struct fun *fun , double tol ) {
     unsigned int N;
 
     /* Call util_simplify */
-    if ( ( N = util_simplify( fun->points , fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , tol ) ) < 0 )
+    if ( ( N = util_simplify( fun->vals.real , fun->coeffs.real , fun->n , fun->b-fun->a , fun->scale , tol ) ) < 0 )
         return error(fun_err_util);
 
-    /* Set the new size. */
-    if ( N < fun->n )
-        fun->n = N;  
+    /* Did the fun shrink? */
+    if ( N < fun->n ) {
+    
+        /* Set the new size. */
+        fun->n = N;
+        
+        /* Compute the new points if chebopts says to do so. */
+        if ( chebopts_opts->flags & chebopts_flag_comppts )
+            if ( fun_points( fun ) < 0 )
+                return error(fun_err);
+                
+        }
     
     /* Sweet. */
     return N;
@@ -1320,7 +1304,7 @@ int fun_roots( struct fun *fun , double *roots ) {
 int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
 
     const int split = 20;
-    double c = -0.004849834917525, tail_max, temp, *v, hscl;
+    double c = -0.004849834917525, tail_max, temp, *v, hscl, dx, pin, wc, ws;
     int nroots;
     int j, k;
     static double *Tleft = NULL, *Tright = NULL;
@@ -1597,10 +1581,12 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         
     /* Find out what the coefficient cutoff tail_max is for the global fun. */
     tail_max = 0.0;
+    pin = M_PI / (fun->n - 1); wc = cos( pin ) - 1.0; ws = sin( pin );
     for ( k = 1 ; k < fun->n ; k++ ) {
         temp = fabs( fun->vals.real[k] - fun->vals.real[k-1] );
-        if ( fabs( fun->points[k] - fun->points[k-1] ) > 2 * DBL_EPSILON )
-            temp /= fabs( fun->points[k] - fun->points[k-1] );
+        dx = cos( pin * k ) * wc + sin( pin * k ) * ws;
+        if ( dx > 2 * DBL_EPSILON )
+            temp /= dx;
         else
             temp /= 2.0 * DBL_EPSILON;
         if ( temp > tail_max )
@@ -1701,15 +1687,34 @@ int fun_display ( struct fun *fun , FILE *out ) {
     if ( !(fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
     
-    a05 = 0.5*fun->a; 
-    b05 = 0.5*fun->b; 
-    /* Loop over the entries */
-    for ( k = 0 ; k < fun->n ; k++ ) {
-        xk = b05 * (fun->points[k] + 1.0) + a05 * (1.0 - fun->points[k]);
-        fprintf(out,"fun.points[%i]=%16.16e \tfun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
-            k, xk, k, fun->vals.real[k], k, fun->coeffs.real[k]);
+    /* Does this fun have points stored? */
+    if ( fun->flags & fun_flag_haspts ) {
+    
+        /* Get the scaling for the points. */
+        a05 = 0.5*fun->a; 
+        b05 = 0.5*fun->b; 
+        
+        /* Loop over the entries */
+        for ( k = 0 ; k < fun->n ; k++ ) {
+            xk = b05 * (fun->points[k] + 1.0) + a05 * (1.0 - fun->points[k]);
+            fprintf(out,"fun.points[%i]=%16.16e \tfun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
+                k, xk, k, fun->vals.real[k], k, fun->coeffs.real[k]);
+            }
+        fprintf(out,"\n");
+        
         }
-    fprintf(out,"\n");
+        
+    /* Nope, no points... */
+    else {
+    
+        /* Loop over the entries */
+        for ( k = 0 ; k < fun->n ; k++ ) {
+            fprintf(out,"fun.vals[%i]=%16.16e \tfun.coeffs[%i]=%16.16e\n",
+                k, fun->vals.real[k], k, fun->coeffs.real[k]);
+            }
+        fprintf(out,"\n");
+        
+        }
     
     /* Huzzah! */
     return fun_err_ok;
@@ -1767,6 +1772,7 @@ inline void _fun_rescale ( struct fun *fun ) {
         if ( scale < fabs( fun->vals.real[k] ) )
             scale = fabs( fun->vals.real[k] );
         
+    /* Store the scale. */
     fun->scale = scale;
     
     }
@@ -1780,6 +1786,12 @@ inline void _fun_rescale ( struct fun *fun ) {
  *
  * @return #fun_err_ok or < 0 on error.
  *
+ * if @c fun has never been initialized or has been initialized but
+ * is too small, its fields are re-allocated.
+ *
+ * If #chebopts_opts has the flag #chebopts_flag_comppts set,
+ * a vector of Chebyshev points of the length of the #fun is 
+ * allocated and filled, and #fun_flag_haspts is set.
  */
 
 int fun_init ( struct fun *fun , unsigned int N ) {
@@ -1794,16 +1806,15 @@ int fun_init ( struct fun *fun , unsigned int N ) {
     else
         fun->n = N;
 
-    /* Set entries to zero. Is this needed?
-    bzero( fun->vals.real , sizeof(double) * N );
-    bzero( fun->coeffs.real , sizeof(double) * N ); */
-    
-    /* Get the Chebyshev nodes. */
-    if ( util_chebpts( N , fun->points ) < 0 )
-        return error(fun_err_util);
-    
     /* Set the init flag. */    
     fun->flags = fun_flag_init;
+    
+    /* Get the Chebyshev nodes, if it's the default. */
+    if ( chebopts_opts->flags & chebopts_flag_comppts ) {
+        if ( fun_points( fun ) < 0 )
+            return error(fun_err);
+        fun->flags |= fun_flag_haspts;
+        }
     
     /* Jolly good! */
     return fun_err_ok;
@@ -1831,9 +1842,13 @@ int _fun_alloc ( struct fun *fun , unsigned int N ) {
 
     /* Allocate the data inside the fun to the correct size. */
     if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * N ) != 0 ||
-         posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 ||
-         ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
+         posix_memalign( (void **)&(fun->coeffs.real) , 16 , sizeof(double) * N ) != 0 )
         return error(fun_err_malloc);
+        
+    /* Allocate data for the points if requested. */
+    if ( chebopts_opts->flags & chebopts_flag_comppts )
+        if ( ( fun->points = (double *)malloc( sizeof(double) * N ) ) == NULL )
+            return error(fun_err_malloc);
 
     /* Write the data to the fun. */
     fun->n = N;
@@ -1877,7 +1892,7 @@ int fun_create_vals ( struct fun *fun , double *vals , double a , double b , uns
     if ( N == 1 )
         fun->coeffs.real[0] = vals[0];
     else {
-        if ( util_chebpoly( vals , N , fun->coeffs.real ) < 0 )
+        if ( util_chebpoly( fun->vals.real , N , fun->coeffs.real ) < 0 )
             return error(fun_err_util);
         }
         
@@ -1921,8 +1936,8 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
     if ( N == 1 )
         fun->vals.real[0] = fun->coeffs.real[0];
     else {
-        if ( util_chebpolyval( coeffs , N , fun->vals.real ) < 0 )
-        return error(fun_err_util);
+        if ( util_chebpolyval( fun->coeffs.real , N , fun->vals.real ) < 0 )
+            return error(fun_err_util);
         }
         
     /* Update the scale */
@@ -1944,7 +1959,8 @@ int fun_create_coeffs ( struct fun *fun , double *coeffs , double a , double b ,
 
 int fun_diff ( struct fun *f, struct fun *fp ) {
 
-    int k, n;
+    int k, N, a, b;
+    double *c;
 
     /* Check for null and stuff. */
     if ( f == NULL || fp == NULL ) {
@@ -1953,45 +1969,62 @@ int fun_diff ( struct fun *f, struct fun *fp ) {
     if ( !( f->flags & fun_flag_init ) ) {
         return error(fun_err_uninit);
         }
-
-    /* If fp is uninit or too small, init fp. */
-    if ( !( fp->flags & fun_flag_init ) || fp->size < f->n - 1 )
-        if ( fun_init( fp , f->n - 1 ) < 0 )
-            return error(fun_err);
+        
+    /* Remember the length of f. */
+    N = f->n; a = f->a; b = f->b;
+        
+    /* If f == fp, we have to store a copy of the old coefficients. */
+    if ( f == fp ) {
+    
+        /* Allocate a temporary buffer for the old coeffs. */
+        if ( ( c = (double *)alloca( sizeof(double) * N ) ) == NULL )
+            return error(fun_err_malloc);
+            
+        /* Copy the old coeffs into the buffer. */
+        memcpy( c , f->coeffs.real , sizeof(double) * N );
+        
+        }
+        
+    /* Otherwise, just set c to f's coeffs. */
+    else
+        c = f->coeffs.real;
+  
+    /* Set fp to the correct size. */
+    if ( fun_init( fp , N-1 ) < 0 )
+        return error(fun_err);
 
     /* Assign the end points */
-    fp->a = f->a;
-    fp->b = f->b;
-  
+    fp->a = a;
+    fp->b = b;
+        
     /* The case where f is a constant is trivial */
-    if ( f->n == 1 ) {
+    if ( N == 1 ) {
         fp->vals.real[0] = 0.0;
         fp->coeffs.real[0] = 0.0;
         fp->scale = 0.0;
-        fp->points[0] = 0.5*(f->b-f->a);
+        fp->points[0] = 0.5*(b - a);
         return fun_err_ok;
         } 
     
     /* Apply the recurrence for the new coefficents */
-    n = f->n;
-    fp->coeffs.real[n-2] = (double)(2*(n-1)) * f->coeffs.real[n-1];
-    fp->coeffs.real[n-3] = (double)(2*(n-2)) * f->coeffs.real[n-2];
-    for ( k = n-4 ; k >= 0 ; k-- )
-        fp->coeffs.real[k] = (double)(2*(k+1)) * f->coeffs.real[k+1] + fp->coeffs.real[k+2];
+    bzero( fp->coeffs.real , sizeof(double) * (N-1) );
+    fp->coeffs.real[N-2] = 2*(N-1) * c[N-1];
+    fp->coeffs.real[N-3] = 2*(N-2) * c[N-2];
+    for ( k = N-4 ; k >= 0 ; k-- )
+        fp->coeffs.real[k] = 2*(k+1) * c[k+1] + fp->coeffs.real[k+2];
     fp->coeffs.real[0] = 0.5*fp->coeffs.real[0];
+    
+    /* Scale the coefficients according to the domain. */
+    for ( k = 0 ; k < N-1 ; k++ )
+        fp->coeffs.real[k] *= 2.0 / (b - a);
 
     /* Extract the vals from these coeffs. */
     if ( util_chebpolyval( fp->coeffs.real , fp->n , fp->vals.real ) < 0 )
          return fun_err_util;
 
-    /* Scale values according to the domain */
-    fun_scale( fp, 2.0/(fp->b-fp->a) , fp );
-
-    fp->scale = 0.0;
-    for ( k = 0 ; k < fp->n ; k++ )
-        if ( fabs(fp->vals.real[k]) > fp->scale )
-            fp->scale = fabs(fp->vals.real[k]);
-
+    /* Get the scale of the new fun. */
+    _fun_rescale( fp );
+            
     /* All is well. */
     return fun_err_ok;
 
@@ -2032,69 +2065,46 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C ) {
     if ( C != A && C != B ) {
     
         /* Clean-up C if needed. */
-        if ( !( C->flags & fun_flag_init ) || C->size < N )
-            if ( fun_init( C , N ) < 0 )
-                return error(fun_err);
+        if ( fun_init( C , N ) < 0 )
+            return error(fun_err);
             
+        /* Collect the coefficients from A and B. */
+        for ( j = 0 ; j < A->n ; j++ )
+            for ( k = 0 ; k < B->n ; k++ ) {
+                w = 0.5 * A->coeffs.real[j] * B->coeffs.real[k];
+                C->coeffs.real[j+k] += w;
+                C->coeffs.real[abs(j-k)] += w;
+                }
+        
         /* Set some values. */
         C->a = A->a; C->b = A->b;
-        
-        /* Get the pointer to the coeffs. */
-        temp = C->coeffs.real;
-        
+
         }
         
     else {
             
-        /* Allocate a buffer for the new coefficients. */
-        if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * N ) != 0 )
+        /* Allocate a temporary buffer for the new coefficients. */
+        if ( ( temp = (double *)alloca( sizeof(double) * N ) ) == NULL )
             return error(fun_err_malloc);
-        bzero( temp , sizeof(double) * (A->n + B->n - 1) );
+        bzero( temp , sizeof(double) * N );
         
-        /* Is the output fun large enough? */
-        if ( C->size < N ) {
+        /* Collect the coefficients from A and B. */
+        for ( j = 0 ; j < A->n ; j++ )
+            for ( k = 0 ; k < B->n ; k++ ) {
+                w = 0.5 * A->coeffs.real[j] * B->coeffs.real[k];
+                temp[j+k] += w;
+                temp[abs(j-k)] += w;
+                }
         
-            /* Allocate the new values. */
-            if ( C->vals.real != NULL )
-                free( C->vals.real );
-            if ( posix_memalign( (void **)&(C->vals.real) , 16 , sizeof(double) * N ) != 0 )
-                return error(fun_err_malloc);
-
-            /* Create the new points. */
-            if ( C->points != NULL )
-                free( C->points );
-            if ( ( C->points = util_chebpts_alloc( N ) ) == NULL )
-                return error(fun_err_malloc);
-                
-            /* Set the new size. */
-            C->size = N;
-                
-            }
+        /* Make sure C is large enough for the output */
+        if ( fun_init( C , N ) < 0 )
+            return error(fun_err);
             
-        /* Otherwise, just need to re-create the points. */
-        else {
-            if ( util_chebpts( N , C->points ) < 0 )
-                return error(fun_err_util);
-            }
-                
+        /* Copy the new coefficients into C. */
+        memcpy( C->coeffs.real , temp , sizeof(double) * N );
+            
         }
 
-    /* Collect the coefficients from A and B. */
-    for ( j = 0 ; j < A->n ; j++ )
-        for ( k = 0 ; k < B->n ; k++ ) {
-            w = 0.5 * A->coeffs.real[j] * B->coeffs.real[k];
-            temp[j+k] += w;
-            temp[abs(j-k)] += w;
-            }
-
-    /* Set the length of C. */
-    C->n = N;
-    
-    /* Set the coefficients. */
-    if ( C->coeffs.real != temp )
-        free( C->coeffs.real );
-    C->coeffs.real = temp;
-    
     /* Compute the new values. */
     if ( util_chebpolyval( C->coeffs.real , C->n , C->vals.real ) < 0 )
         return error(fun_err_util);
@@ -2148,6 +2158,13 @@ double fun_integrate ( struct fun *fun ) {
  * @param A The #fun to be integrated.
  * @param B The indefinite integral.
  * @return #fun_err_ok or < 0 if an error occurs.
+ *
+ * Computes the indefinite integral of the #fun @c A and stores it
+ * in the #fun pointed to by @c B, where @c A and @c B may be the
+ * same #fun.
+ *
+ * The indefinite integral is scaled such that it is zero at
+ * the rightmost edge of the interval.
  */
 
 int fun_indef_integral ( struct fun *A , struct fun *B ) {
@@ -2181,16 +2198,9 @@ int fun_indef_integral ( struct fun *A , struct fun *B ) {
     /* A and B are not the same fun. */
     else {
     
-        /* Start by cleaning out B if needed. */
-        if ( !( B->flags & fun_flag_init ) || B->size < A->n + 1 ) {
-            if ( fun_init( B , A->n + 1 ) < 0 )
-                return error(fun_err);
-            }
-        else {
-            B->n = A->n + 1;
-            if ( util_chebpts( B->n , B->points ) < 0 )
-                return error(fun_err_util);
-            }
+        /* Make sure B has the right size. */
+        if ( fun_init( B , A->n + 1 ) < 0 )
+            return error(fun_err);
             
         /* Set the bounds of B. */
         B->a = A->a;
@@ -2265,42 +2275,30 @@ int fun_scale ( struct fun *A , double w , struct fun *B ) {
     if ( !( A->flags & fun_flag_init ) )
         return error(fun_err_uninit);
         
-    /* Are A and B one and the same? */
-    if ( A == B ) {
+    /* If B is not A, make B a copy of A. */
+    if ( B != A ) {
     
-        /* Run through the coeffs and vals and scale them all. */
-        for ( k = 0 ; k < A->n ; k++ ) {
-            A->vals.real[k] *= w;
-            A->coeffs.real[k] *= w;
-            }
-            
-        /* Adjust the scale of A. */
-        A->scale *= fabs(w);
-        
-        }
-        
-    /* A and B are not the same fun. */
-    else {
-    
-        /* Make sure B is the right size. */
-        if ( !( B->flags & fun_flag_init ) || ( B->size < A->n ) )
-            if ( fun_init( B , A->n ) != fun_err_ok )
-                return error(fun_err);
-            
-        /* Copy the values from A to B */
-        B->flags = A->flags;
-        B->a = A->a; B->b = A->b;
-        B->n = A->n;
-        B->scale = fabs(w) * A->scale;
-        
-        /* Copy the scaled values from A. */
+        /* Copy A into B. */
+        if ( fun_copy( A , B ) != fun_err_ok )
+            return error(fun_err);
+                    
+        /* Scale the values in B. */
         for ( k = 0 ; k < B->n ; k++ ) {
-            B->points[k] = A->points[k];
-            B->vals.real[k] = w * A->vals.real[k];
-            B->coeffs.real[k] = w * A->coeffs.real[k];
+            B->vals.real[k] *= w;
+            B->coeffs.real[k] *= w;
             }
+        B->scale = fabs(w) * B->scale;
     
         }
+        
+    /* Run through the coeffs and vals and scale them all. */
+    for ( k = 0 ; k < B->n ; k++ ) {
+        B->vals.real[k] *= w;
+        B->coeffs.real[k] *= w;
+        }
+
+    /* Adjust the scale of B. */
+    B->scale *= fabs(w);
         
     /* We made it! */
     return fun_err_ok;
@@ -2397,18 +2395,14 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
     /* Is C neither a nor b? */
     if ( C != a && C != b ) {
     
-        /* Init C if needed */
-        if ( !( C->flags & fun_flag_init ) || C->size < a->n )
-            if ( fun_init( C , a->n ) < 0 )
-                return error(fun_err);
+        /* Init C to the correct size. */
+        if ( fun_init( C , a->n ) < 0 )
+            return error(fun_err);
             
         /* Set the domain. */
         C->n = a->n;
         C->a = a->a; C->b = a->b;
             
-        /* Copy the points from a. */
-        memcpy( C->points , a->points , sizeof(double) * C->n );
-
         /* Merge the coefficients from a and b. */
         for ( k = 0 ; k < b->n ; k++ )
             C->coeffs.real[k] = wa * a->coeffs.real[k] + wb * b->coeffs.real[k];
@@ -2483,32 +2477,26 @@ int fun_madd ( struct fun *A , double alpha , struct fun *B , double beta , stru
         /* Different lengths in a and b. */
         else {
         
-            /* Free the old points, re-allocate them and copy them from a. */
-            free( C->points );
-            if ( ( C->points = (double *)malloc( sizeof(double) * a->n ) ) == NULL )
+            /* Create a buffer to hold the coefficients of C. */
+            if ( ( temp = (double *)alloca( sizeof(double) * a->n ) ) == NULL )
                 return error(fun_err_malloc);
-            for ( k = 0 ; k < a->n ; k++ )
-                C->points[k] = a->points[k];
-                
-            /* Allocate memory for the new coeffs and merge from a and b. */
-            if ( posix_memalign( (void **)&(temp) , 16 , sizeof(double) * a->n ) != 0 )
-                return error(fun_err_malloc);
+            bzero( temp , sizeof(double) * a->n );
+        
+            /* Merge the coefficients from a and b. */
             for ( k = 0 ; k < b->n ; k++ )
                 temp[k] = wa * a->coeffs.real[k] + wb * b->coeffs.real[k];
             for ( k = k ; k < a->n ; k++ )
                 temp[k] = wa * a->coeffs.real[k];
                 
-            /* Free and replace the coeffs from b. */
-            free( C->coeffs.real );
-            C->coeffs.real = temp;
+            /* Re-init C to the correct size. */
+            if ( fun_init( C , a->n ) < 0 )
+                return error(fun_err);
+                
+            /* Set the merged coefficients into C. */
+            memcpy( C->coeffs.real , temp , sizeof(double) * a->n );
             
-            /* Set the new length. */
-            C->n = a->n;
-            C->size = a->n;
-    
             /* Extract the vals from the merged coeffs. */
-            free( C->vals.real );
-            if ( ( C->vals.real = util_chebpolyval_alloc( C->coeffs.real , C->n ) ) == NULL )
+            if ( util_chebpolyval( C->coeffs.real , a->n , C->vals.real ) < 0 )
                 return error(fun_err_util);
                 
             }
@@ -2752,6 +2740,10 @@ double fun_eval_bary ( struct fun *fun , double x ) {
     ih = 2.0 / ( fun->b - fun->a );
     x = ( x - m ) * ih;
         
+    /* Get the Chebyshev points, if needed. */
+    if ( !( fun->flags & fun_flag_haspts ) && ( fun_points( fun ) < 0 ) )
+        return error(fun_err);
+        
     /* Do the barycentric form in place. */
     /* Do the first node separately due to the half-weight. */
     if ( x == fun->points[0] )
@@ -2780,8 +2772,8 @@ double fun_eval_bary ( struct fun *fun , double x ) {
     return u / v;
 
     }
-
-
+    
+    
 /**
  * @brief Evaluates the given fun at the given vector of nodes @c x using
  *      barycentric interpolation.
@@ -2822,6 +2814,10 @@ int fun_eval_bary_vec ( struct fun *fun , const double *x , unsigned int m , dou
     /* Get the centre and width of the interval. */
     mi = ( fun->a + fun->b ) * 0.5;
     ih = 2.0 / ( fun->b - fun->a );
+    
+    /* Get the Chebyshev points, if needed. */
+    if ( !( fun->flags & fun_flag_haspts ) && ( fun_points( fun ) < 0 ) )
+        return error(fun_err);
         
     /* For each element of x... */
     for ( j = 0 ; j < m ; j++ ) {
@@ -2881,6 +2877,36 @@ int fun_eval_bary_vec ( struct fun *fun , const double *x , unsigned int m , dou
 
 
 /**
+ * @brief Allocate and compute the points for a #fun.
+ *
+ * @param fun The #fun to which to attach points.
+ */
+ 
+int fun_points ( struct fun *fun ) {
+
+    /* Check for nonsense. */
+    if ( fun == NULL )
+        return error(fun_err_null);
+        
+    /* Allocate an array for the points if needed. */
+    if ( fun->points == NULL )
+        if ( ( fun->points = (double *)malloc( sizeof(double) * fun->size ) ) == NULL )
+            return error(fun_err_malloc);
+            
+    /* Fill the points. */
+    if ( util_chebpts( fun->n , fun->points ) < 0 )
+        return error(fun_err_util);
+        
+    /* Set the flag. */
+    fun->flags |= fun_flag_haspts;
+        
+    /* Good night and good luck. */
+    return fun_err_ok;
+
+    }
+
+
+/**
  * @brief Release all memory associated with a #fun.
  *
  * @param fun The #fun to be cleaned-up.
@@ -2895,9 +2921,12 @@ int fun_clean ( struct fun *fun ) {
         
     /* Check if this fun was initialized at all. */
     if ( fun->flags & fun_flag_init ) {
-        free( fun->points );
-        free( fun->vals.real );
-        free( fun->coeffs.real );
+        if ( fun->points != NULL )
+            free( fun->points );
+        if ( fun->vals.real != NULL )
+            free( fun->vals.real );
+        if ( fun->coeffs.real != NULL )
+            free( fun->coeffs.real );
         }
         
     /* Re-set some values. */
@@ -3194,10 +3223,6 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
                     v[2*k-1] = x[N/2+k-1];
                     }
                     
-                /* Correct the values of x for util_simplify. */
-                for ( k = 0 ; k < N ; k++ )
-                    x[k] = m + h * xi[ k * stride ];
-                    
                 }
         
             }
@@ -3209,7 +3234,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         
         /* Check convergence of the coefficients. */
-        if ( ( N_new = util_simplify( x , v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
+        if ( ( N_new = util_simplify( v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
             return fun_err_util;
             
         /* TODO: Sampletest? */
@@ -3231,17 +3256,12 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         
     /* Allocate the data inside the fun to the correct size. */
-    if ( !( fun->flags & fun_flag_init ) || fun->n < N ) {
-        if ( _fun_alloc( fun , N ) < 0 )
-            return error(fun_err);
-        }
-    else
-        fun->n = N;
+    if ( fun_init( fun , N ) < 0 )
+        return error(fun_err);
     
     /* Write the data to the fun. */
     memcpy( fun->vals.real , v , sizeof(double) * N );
     memcpy( fun->coeffs.real , coeffs , sizeof(double) * N );
-    memcpy( fun->points , x , sizeof(double) * N );
     fun->scale = scale;
     fun->a = a;
     fun->b = b;

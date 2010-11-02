@@ -36,7 +36,8 @@
 
 #define chebopts_flag_compcoeffs        64
 #define chebopts_flag_compvals          128
-#define chebopts_flag_evalbary          256
+#define chebopts_flag_comppts           256
+#define chebopts_flag_evalbary          512
 
 
 /* Error codes. */

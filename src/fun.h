@@ -32,6 +32,7 @@
 #define fun_flag_none                   0
 #define fun_flag_init                   1
 #define fun_flag_cplx                   2
+#define fun_flag_haspts                 4
 
 
 /* Error codes. */
@@ -132,6 +133,7 @@ int fun_mul ( struct fun *A , struct fun *B , struct fun *C );
 int fun_newdomain( struct fun *fun , double a , double b);
 double fun_norm2 ( struct fun *fun );
 double fun_norm_inf ( struct fun *fun );
+int fun_points ( struct fun *fun );
 int fun_poly ( struct fun *f1 , double *out );
 int fun_prolong( struct fun *A , unsigned int N , struct fun *B);
 int fun_rescale ( struct fun *fun );
