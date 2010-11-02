@@ -20,7 +20,7 @@ AUTOMAKE_OPTIONS=gnu
 
 # Add the debug flag to the whole thing
 # AM_CFLAGS = -g -O2 $(SIMD_FLAGS) $(CFLAGS)
-AM_CFLAGS = -g -O2
+AM_CFLAGS = -g -O2 -Wall
 
 # Build the libchebfun library
 lib_LTLIBRARIES = libchebfun.la

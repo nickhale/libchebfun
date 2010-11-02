@@ -27,6 +27,11 @@
 #include <clapack.h>
 #include <fftw3.h>
 
+/* Include configuration variables. */
+#ifdef HAVE_CONFIG_H
+    #include "../config.h"
+#endif
+
 /* Local includes. */
 #include "errs.h"
 #include "chebopts.h"
@@ -441,6 +446,7 @@ int fun_poly ( struct fun *f1 , double *out ) {
  
 int fun_gnuplot ( struct fun *f1 ) {
 
+#ifdef HAVE_GNUPLOT
     int k, npts = 1000;
     double tk, xk, vk, scl1, scl2;
     FILE *lines, *marks, *pipe;
@@ -495,6 +501,7 @@ int fun_gnuplot ( struct fun *f1 ) {
 
     /* Close the pipe */
     pclose(pipe);
+#endif
 
     return fun_err_ok; 
     
