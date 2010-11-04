@@ -166,7 +166,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     double a, b;
     double m, h;
     unsigned int N;
-    int k, N_new;
+    int j, k, N_new;
     
     /* Routine checks of sanity. */
     if ( ( A == NULL ) || ( op == NULL ) )
@@ -199,7 +199,7 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
     
     /* Main loop. */
     while ( 1 ) {  
-
+    
         /* Evaluate A at N chebyshev points and put the values in v. */
         if ( N > A->n ) {
             memcpy( coeffs, A->coeffs.real , sizeof(double) * A->n );
@@ -208,10 +208,19 @@ int fun_comp_vec ( struct fun *A , int (*op)( const double * , unsigned int , do
                 return error(fun_err_util);
             }
         else if ( A->n > N ) {
-            if ( util_chebpts( N , x ) < 0 )
+            bzero( coeffs , sizeof(double) * N );
+            for ( k = 0 ; k < A->n ; k += 2*N-2 )
+                coeffs[0] += A->coeffs.real[k];
+            for ( j = 1 ; j < N-1 ; j++ ) {
+                for ( k = j ; k < A->n ; k += 2*N-2 )
+                    coeffs[j] += A->coeffs.real[k];
+                for ( k = 2*N-2-j ; k < A->n ; k += 2*N-2 )
+                    coeffs[j] += A->coeffs.real[k];
+                }
+            for ( k = N-1 ; k < A->n ; k += 2*N-2 )
+                coeffs[N-1] += A->coeffs.real[k];
+            if ( util_chebpolyval( coeffs , N , x ) < 0 )
                 return error(fun_err_util);
-            if ( fun_eval_clenshaw_vec( A , x , N , x ) < 0 )
-                return error(fun_err);
             }
         else
             memcpy( x , A->vals.real , sizeof(double) * N );
@@ -664,15 +673,15 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
             /* Restricting - need to consider aliasing */
             else {
                 bzero( B->coeffs.real , sizeof(double) * N );
-                for ( k = 0 ; k < A->n ; k += 2*(N-2) )
+                for ( k = 0 ; k < A->n ; k += 2*N-2 )
                     B->coeffs.real[0] += A->coeffs.real[k];
                 for ( j = 1 ; j < N-1 ; j++ ) {
-                    for ( k = j ; k < A->n ; k += 2*(N-2) )
+                    for ( k = j ; k < A->n ; k += 2*N-2 )
                         B->coeffs.real[j] += A->coeffs.real[k];
-                    for ( k = 2*(N-2)-j+2 ; k < A->n ; k += 2*(N-2) )
+                    for ( k = 2*N-2-j ; k < A->n ; k += 2*N-2 )
                         B->coeffs.real[j] += A->coeffs.real[k];
                     }
-                for ( k = N-1 ; k < A->n ; k += 2*(N-2) )
+                for ( k = N-1 ; k < A->n ; k += 2*N-2 )
                     B->coeffs.real[N-1] += A->coeffs.real[k];
                 }
                 
@@ -713,15 +722,15 @@ int fun_prolong ( struct fun *A , unsigned int N , struct fun *B ) {
         if ( ( c = (double *)alloca( sizeof(double) * N ) ) == NULL )
             return error(fun_err_malloc);
         bzero( c , sizeof(double) * N );
-        for ( k = 0 ; k < A->n ; k += 2*(N-2) )
+        for ( k = 0 ; k < A->n ; k += 2*N-2 )
             c[0] += A->coeffs.real[k];
         for ( j = 1 ; j < N-1 ; j++ ) {
-            for ( k = j ; k < A->n ; k += 2*(N-2) )
+            for ( k = j ; k < A->n ; k += 2*N-2 )
                 c[j] += A->coeffs.real[k];
-            for ( k = 2*(N-2)-j+2 ; k < A->n ; k += 2*(N-2) )
+            for ( k = 2*N-2-j ; k < A->n ; k += 2*N-2 )
                 c[j] += A->coeffs.real[k];
             }
-        for ( k = N-1 ; k < A->n ; k += 2*(N-2) )
+        for ( k = N-1 ; k < A->n ; k += 2*N-2 )
             c[N-1] += A->coeffs.real[k];
         memcpy( A->coeffs.real , c , sizeof(double) * N );
                     
@@ -2895,6 +2904,36 @@ int fun_points ( struct fun *fun ) {
         
     /* Set the flag. */
     fun->flags |= fun_flag_haspts;
+        
+    /* Good night and good luck. */
+    return fun_err_ok;
+
+    }
+
+
+/**
+ * @brief Allocate and compute the values for a #fun.
+ *
+ * @param fun The #fun to which to attach values.
+ */
+ 
+int fun_vals ( struct fun *fun ) {
+
+    /* Check for nonsense. */
+    if ( fun == NULL )
+        return error(fun_err_null);
+        
+    /* Allocate an array for the points if needed. */
+    if ( fun->vals.real == NULL )
+        if ( posix_memalign( (void **)&(fun->vals.real) , 16 , sizeof(double) * fun->size ) != 0 )
+            return error(fun_err_malloc);
+            
+    /* Fill the points. */
+    if ( util_chebpolyval( fun->coeffs.real , fun->n , fun->vals.real ) < 0 )
+        return error(fun_err_util);
+        
+    /* Set the flag. */
+    fun->flags |= fun_flag_hasvals;
         
     /* Good night and good luck. */
     return fun_err_ok;

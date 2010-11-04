@@ -33,6 +33,8 @@
 #define fun_flag_init                   1
 #define fun_flag_cplx                   2
 #define fun_flag_haspts                 4
+#define fun_flag_hasvals                8
+#define fun_flag_hascoeffs              16
 
 
 /* Error codes. */
@@ -135,7 +137,7 @@ double fun_norm2 ( struct fun *fun );
 double fun_norm_inf ( struct fun *fun );
 int fun_points ( struct fun *fun );
 int fun_poly ( struct fun *f1 , double *out );
-int fun_prolong( struct fun *A , unsigned int N , struct fun *B);
+int fun_prolong( struct fun *A , unsigned int N , struct fun *B );
 int fun_rescale ( struct fun *fun );
 void _fun_rescale ( struct fun *fun );
 int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout );
@@ -146,3 +148,4 @@ int fun_scale ( struct fun *A , double w , struct fun *B );
 int _fun_simplify ( struct fun *fun, double tol );
 int fun_simplify ( struct fun *fun, double tol );
 int fun_sub ( struct fun *A , struct fun *B , struct fun *C );
+int fun_vals ( struct fun *fun );

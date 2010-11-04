@@ -355,7 +355,7 @@ int chebtest_prolong ( char **name ) {
         return FAIL;
         
     /* Prolong (restrict) the fun f1 into f2. */
-    if ( fun_prolong( &f1 , f1.n - 10 , &f2 ) < 0 )
+    if ( fun_prolong( &f1 , f1.n / 2 , &f2 ) < 0 )
         return FAIL;
         
     /* Check if the prolonged function matches at the nodes. */
@@ -393,7 +393,7 @@ int chebtest_prolong ( char **name ) {
         return FAIL;
     
     /* Prolong (restrict) the fun f2 into f2. */
-    if ( fun_prolong( &f2 , f2.n - 10 , &f2 ) < 0 )
+    if ( fun_prolong( &f2 , f2.n / 2 , &f2 ) < 0 )
         return FAIL;
         
     /* Check if the prolonged function matches at the nodes. */

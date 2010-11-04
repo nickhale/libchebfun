@@ -42,8 +42,8 @@ chebtest_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for WildFunction
 WildFunction_SOURCES = WildFunction.c
-# WildFunction_LDADD = ../src/.libs/libchebfun.a -lprofiler $(LAPACK_LIBS) $(BLAS_LIBS)
-WildFunction_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
+WildFunction_LDADD = ../src/.libs/libchebfun.a -lprofiler $(LAPACK_LIBS) $(BLAS_LIBS)
+# WildFunction_LDADD = ../src/.libs/libchebfun.a $(LAPACK_LIBS) $(BLAS_LIBS)
 
 # Sources for BesselRoots
 BesselRoots_SOURCES = BesselRoots.c
