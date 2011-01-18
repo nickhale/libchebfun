@@ -19,10 +19,14 @@
 
 /* System-wide includes. */
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <float.h>
 #include <complex.h>
 #include <fftw3.h>
+#ifdef __SSE2__
+    #include <emmintrin.h>
+#endif
 
 /* Local includes. */
 #include "errs.h"
@@ -103,7 +107,10 @@ double util_clenshaw ( double *coeffs , unsigned int N , double x ) {
 int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned int M , double *out ) {
 
     int j, k;
-    double yn, ynp1 = 0.0, ynp2;
+    #ifdef __SSE2__
+        __v2df vxj, vyn, vynp1, vynp2, vtwo = _mm_set1_pd( 2.0 );
+    #endif
+    double yn, ynp1, ynp2;
 
     /* Check for nonsense. */
     if ( coeffs == NULL || x == NULL || out == NULL )
@@ -121,21 +128,64 @@ int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned i
         }
         
     /* Loop over the input values. */
-    for ( j = 0 ; j < M ; j++ ) {
-        
-        /* Init the recurrence. */
-        ynp1 = 0.0; yn = 0.0;
+    #ifdef __SSE2__
+    /* Are all the values aligned correctly? */
+    if ( ((size_t)x) % 16 == 0 && ((size_t)out) % 16 == 0 ) {
+    
+        for ( j = 0 ; j < M - 1 ; j += 2 ) {
 
-        /* Evaluate the recurrence. */
-        for ( k = N-1 ; k >= 0 ; k-- ) {
-            ynp2 = ynp1; ynp1 = yn;
-            yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
+            /* Init the recurrence. */
+            vxj = _mm_load_pd( &(x[j]) );
+            vxj = _mm_mul_pd( vxj , vtwo );
+            vynp1 = _mm_setzero_pd();
+            vyn = _mm_setzero_pd();
+
+            /* Evaluate the recurrence. */
+            for ( k = N-1 ; k >= 0 ; k-- ) {
+                vynp2 = vynp1; vynp1 = vyn;
+                vyn = _mm_add_pd( _mm_load1_pd( &(coeffs[k]) ) , _mm_sub_pd( _mm_mul_pd( vxj , vynp1 ) , vynp2 ) );
+                }
+
+            /* store the result. */
+            _mm_store_pd( &(out[j]) , _mm_sub_pd( vyn , _mm_mul_pd( _mm_mul_pd( _mm_set1_pd( 0.5 ) , vxj ) , vynp1 ) ) );
+
             }
-
-        /* store the result. */
-        out[j] = yn - x[j] * ynp1;
-        
+            
+        /* Leftovers? */
+        if ( j < M ) {
+            ynp1 = 0.0; yn = 0.0;
+            for ( k = N-1 ; k >= 0 ; k-- ) {
+                ynp2 = ynp1; ynp1 = yn;
+                yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
+                }
+            out[j] = yn - x[j] * ynp1;
+            }
+            
         }
+            
+    /* Otherwise, no SSE-stuff. */
+    else {
+    #endif
+    
+        for ( j = 0 ; j < M ; j++ ) {
+
+            /* Init the recurrence. */
+            ynp1 = 0.0; yn = 0.0;
+
+            /* Evaluate the recurrence. */
+            for ( k = N-1 ; k >= 0 ; k-- ) {
+                ynp2 = ynp1; ynp1 = yn;
+                yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
+                }
+
+            /* store the result. */
+            out[j] = yn - x[j] * ynp1;
+
+            }
+            
+    #ifdef __SSE2__
+        }
+    #endif
         
     /* If all went well... */
     return util_err_ok;
@@ -174,7 +224,10 @@ double * util_diffmat ( unsigned int N ) {
         error(util_err_malloc);
         return NULL;
         }
-    D = (double *)( (((size_t)D) + 15 ) & ~15 );
+    if ( posix_memalign( (void **)(&D) , 16 , sizeof(double) * N * N ) != 0 ) {
+        error(util_err_malloc);
+        return NULL;
+        }
 
     /* Get the Chebyshev points. */
     if ( util_chebpts ( N , x ) != 0 ) {

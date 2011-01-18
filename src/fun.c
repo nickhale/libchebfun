@@ -1337,7 +1337,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
             tol = 100.0 * h * DBL_EPSILON;
             
             /* Adjust N and compute scaling cN. */
-        	for ( N -= 1 ; fabs(fun->coeffs.real[N]) < 1e-14 * fun->scale && N > 0 ; N-- );
+        	for ( N -= 1 ; fabs(coeffs[N]) < 1e-14 * fun->scale && N > 0 ; N-- );
             cN = -0.5 / coeffs[N];
 
             /* Trivial case of N==0. */
@@ -1412,7 +1412,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
             /* Count the number of valid roots and store them. */
             /* Note, imag tol in Matlab is 0.5*tol ... */
 		    for (j = ok ; j < N ; j++)
-			    if ( fabs(ri[j]) < tol && rr[j] >= -(1.0+tol) && rr[j] <= (1.0+tol) )
+			    if ( fabs(ri[j]) < tol && fabs(rr[j]) <= (1.0+tol) )
                     roots[nroots++] = rr[j];  
 
             /* Sort if required. */
@@ -1527,7 +1527,7 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         sizeT = 513;
         
         /* Set the stride for the Tleft and Tright matrices such as to
-            preserve alignment. */
+            preserve alignment (multiple of four doubles). */
         skipT = (sizeT + 3) & ~3;
             
         /* Allocate the new matrices. */
@@ -1581,6 +1581,10 @@ int fun_roots_unit ( struct fun *fun , double *roots , int sort ) {
         
         /* Clean up v. */
         free(v);
+        
+        /* Dump the last column of Tleft. */
+        /* for ( k = 0 ; k < sizeT ; k++ )
+            printf("%3i: %20.16e\n", k, Tleft[(sizeT-1)*skipT+k]); */
         
         /* printf("done.\n"); fflush(stdout); */
         

@@ -1,0 +1,21 @@
+
+Things that need to be done, in no particular order:
+
+
+Things to do with useabiliy:
+
+* 2011/01/18: Add chebfun object as a wrapper for funs.
+* 2011/01/18: Add operators at some point.
+
+
+Things to do with performance:
+
+* 2011/01/18: Use SSE/SSE2 instructions in fun_eval_bary_vec to do
+              up to four points at a time, perhaps move to util.c to
+              keep things well separated.
+
+
+Things to do with testing:
+
+* 2011/01/18: Not all routines in from src/fun.c are tested in 
+              examples/chebtest.c yet.
