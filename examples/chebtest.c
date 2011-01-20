@@ -212,6 +212,9 @@ int chebtest_restrict ( char **name ) {
         return FAIL;
     
     /* Compare the results. */
+    /* for ( k = 0 ; k < f2.n ; k++ )
+        printf("chebtest_restrict: v[%i]=%e, f2.vals[%i]=%e, diff=%e\n",
+            k, v[k], k, f2.vals.real[k], fabs(v[k]-f2.vals.real[k]) ); */
     for ( k = 0 ; k < f2.n ; k++ ) {
         if ( fabs( v[k] - f2.vals.real[k] ) > 100 * f1.scale * DBL_EPSILON )
             return FAIL;
@@ -868,23 +871,37 @@ int main ( int argc , char *argv[] ) {
         &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest , 
         &chebtest_rootspol };
     
-    int k, res;
+    int j, k, res, runs = 1;
     char *name = NULL;
     
-    /* Loop over the chebtests. */
-    for ( k = 0 ; k < ntests ; k++ ) {
-    
-        /* Call the kth chebtest. */
-        res = (*tests[k])( &name );
+    /* Did the user specify a number of iterations? */
+    if ( argc > 1 )
+        runs = atol(argv[1]);
         
-        /* Be verbose about the result. */
-        if ( res != PASS ) {
-            printf("chebtest: test %s failed on line %i of file %s.\n", name, -res, __FILE__ );
-            errs_dump(stdout);
-            }
-        else
-            printf("chebtest: test %s passed.\n", name);
+    /* Set the default to use bary. */
+    chebopts_opts->flags |= chebopts_flag_evalbary;
+        
+    /* Loop over the number of runs. */
+    for ( j = 0 ; j < runs ; j++ ) {
     
+        /* Loop over the chebtests. */
+        for ( k = 0 ; k < ntests ; k++ ) {
+
+            /* Call the kth chebtest. */
+            res = (*tests[k])( &name );
+
+            /* Be verbose about the result. */
+            if ( j == 0 ) {
+                if ( res != PASS ) {
+                    printf("chebtest: test %s failed on line %i of file %s.\n", name, -res, __FILE__ );
+                    errs_dump(stdout);
+                    }
+                else
+                    printf("chebtest: test %s passed.\n", name);
+                }
+
+            }
+            
         }
     
     /* Leave quietly. */

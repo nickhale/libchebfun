@@ -2,10 +2,17 @@
 Things that need to be done, in no particular order:
 
 
-Things to do with useabiliy:
+Things to do with usabiliy:
 
 * 2011/01/18: Add chebfun object as a wrapper for funs.
 * 2011/01/18: Add operators at some point.
+
+
+Things to do with functionality:
+
+* 2011/01/19: Make specific bary and clenshaw routines for real vs. cplx
+              fun values and coefficients, let fun_eval do the
+              dispatching.
 
 
 Things to do with performance:

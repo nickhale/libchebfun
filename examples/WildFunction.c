@@ -35,11 +35,11 @@
  */
 
 /* WildFunction */
-int main ( ) {
+int main ( int argc , char *argv[] ) {
 
     struct fun f = FUN_EMPTY, s = FUN_EMPTY;
     double sum, maxx, maxy;
-    int j, k;
+    int j, k, runs = 10;
 
     // sin(pi*x).
     int sinpix ( const double *x , unsigned int N , double *v , void *data ) {
@@ -68,8 +68,15 @@ int main ( ) {
         return 0;
         }
         
+    /* Set the default to use bary. */
+    /* chebopts_opts->flags |= chebopts_flag_evalbary; */
+        
+    /* Did the user specify a number of runs? */
+    if ( argc > 1 )
+        runs = atoi(argv[1]);
+        
     /* Main loop. */
-    for ( k = 0 ; k < 10 ; k++ ) {
+    for ( k = 0 ; k < runs ; k++ ) {
 
         // Make starting funs.
         fun_create_vec( &f , &sinpix , -1.0 , 1.0 , NULL );

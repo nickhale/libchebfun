@@ -50,3 +50,5 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
 double * util_diffmat ( unsigned int N );
 double util_clenshaw ( double *coeffs , unsigned int N , double x );
 int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned int M , double *out );
+double util_bary_real ( const double *vals , const double *points , unsigned int N , double x );
+double util_bary_vec_real ( const double *vals , const double *points , unsigned int N , const double *x , double *out , unsigned int M );

@@ -908,7 +908,7 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
 	if ( ( vals = (double *)alloca( sizeof(double) * nroots + 16 ) ) == NULL )
         return error(fun_err_malloc);
     vals = (double *)( (((size_t)vals) + 15 ) & ~15 );
-	if ( fun_eval_clenshaw_vec ( fun , roots , nroots , vals ) < 0 )
+	if ( fun_eval_vec ( fun , roots , nroots , vals ) < 0 )
         return error(fun_err);
 	
 	/* Find the maximum */
@@ -1021,9 +1021,8 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         return error(fun_err_malloc);
         
     /* Make sure that fun has points! */
-    if ( !( fun->flags & fun_flag_haspts ) )
-        if ( fun_points( fun ) < 0 )
-            return error(fun_err);
+    if ( !( fun->flags & fun_flag_haspts ) && fun_points( fun ) < 0 )
+        return error(fun_err);
 
     /* Note, writing in this form ensures the ends are mapped exactly, even with rounding errors. */
     for ( j = 0 ; j < fun->n ; j++ )
@@ -1035,11 +1034,20 @@ int fun_restrict ( struct fun *fun , double A , double B , struct fun *funout ) 
         if ( fun_init( funout , fun->n ) != fun_err_ok )
             return error(fun_err);
                 
+        /* Get the restricted values. */
+        if ( fun_eval_vec( fun , x , fun->n , funout->vals.real ) < 0 )
+            return error(fun_err);
+
         }
         
-    /* Get the restricted values. */
-    if ( fun_eval_clenshaw_vec( fun , x , fun->n , funout->vals.real ) < 0 )
-        return error(fun_err);
+    else {
+        
+        /* Get the restricted values. */
+        if ( fun_eval_vec( fun , x , fun->n , x ) < 0 )
+            return error(fun_err);
+        memcpy( funout->vals.real , x , sizeof(double) * fun->n );
+        
+        }
         
     /* Set the new limits. */
 	funout->a = A;
@@ -2608,8 +2616,7 @@ int fun_eval_vec ( struct fun *fun , const double *x , unsigned int m , double *
  
 double fun_eval_clenshaw ( struct fun *fun , double x ) {
 
-    int k;
-    double yn = 0.0, ynp1 = 0.0, ynp2, m, ih;
+    double res, m, ih;
 
     /* Check for nonsense. */
     if ( fun == NULL ) {
@@ -2621,25 +2628,19 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
         return NAN;
         }
         
-    /* Check for the simplest cases. */
-    if ( fun->n == 0 )
-        return 0.0;
-    else if ( fun->n == 1 )
-        return fun->coeffs.real[0];
-        
     /* Map x to the interval [-1,1]. */
     m = ( fun->a + fun->b ) * 0.5;
     ih = 2.0 / ( fun->b - fun->a );
     x = ( x - m ) * ih;
         
-    /* Evaluate the recurrence. */
-    for ( k = fun->n-1 ; k >= 0 ; k-- ) {
-        ynp2 = ynp1; ynp1 = yn;
-        yn = fun->coeffs.real[k] + 2 * x * ynp1 - ynp2;
+    /* Call util_clenshaw. */
+    if ( isnan( res = util_clenshaw( fun->coeffs.real , fun->n , x ) ) ) {
+        error(fun_err_util);
+        return NAN;
         }
         
     /* Return the result. */
-    return yn - x * ynp1;
+    return res;
         
     }
     
@@ -2661,8 +2662,8 @@ double fun_eval_clenshaw ( struct fun *fun , double x ) {
 
 int fun_eval_clenshaw_vec ( struct fun *fun , const double *x , unsigned int m , double *out ) {
 
-    int j, k;
-    double yn, ynp1 = 0.0, ynp2, xj, mi, ih;
+    int j;
+    double *xj, mi, ih;
 
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
@@ -2670,44 +2671,25 @@ int fun_eval_clenshaw_vec ( struct fun *fun , const double *x , unsigned int m ,
     if ( !( fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
         
-    /* Check for the simplest cases. */
-    if ( fun->n < 2 ) {
-        if ( fun->n == 0 )
-            for ( k = 0 ; k < m ; k++ )
-                out[k] = 0.0;
-        else
-            for ( k = 0 ; k < m ; k++ )
-                out[k] = fun->coeffs.real[0];
-        return fun_err_ok;
+    /* Create and adjust the xj. */
+    if ( fun->a == -1.0 && fun->b == 1.0 )
+        xj = (double *)x;
+    else {
+        mi = ( fun->a + fun->b ) * 0.5;
+        ih = 2.0 / ( fun->b - fun->a );
+        if ( ( xj = (double *)alloca( sizeof(double) * m ) ) == NULL )
+            return error(fun_err_malloc);
+        for ( j = 0 ; j < m ; j++ )
+            xj[j] = ( x[j] - mi ) * ih;
         }
-        
-    /* Get the centre and width of the interval. */
-    mi = ( fun->a + fun->b ) * 0.5;
-    ih = 2.0 / ( fun->b - fun->a );
-        
-    /* Loop over the input values. */
-    for ( j = 0 ; j < m ; j++ ) {
-        
-        /* Map x[j] back to the [-1,1] interval. */
-        xj = ( x[j] - mi ) * ih;
     
-        /* Init the recurrence. */
-        ynp1 = 0.0; yn = 0.0;
-
-        /* Evaluate the recurrence. */
-        for ( k = fun->n-1 ; k >= 0 ; k-- ) {
-            ynp2 = ynp1; ynp1 = yn;
-            yn = fun->coeffs.real[k] + 2 * xj * ynp1 - ynp2;
-            }
-
-        /* store the result. */
-        out[j] = yn - xj * ynp1;
+    /* Call util_bary_vec_real. */
+    if ( util_clenshaw_vec( fun->coeffs.real , fun->n , xj , m , out ) < 0 )
+        return error(fun_err_util);
         
-        }
-        
-    /* If all went well... */
+    /* All is well... */
     return fun_err_ok;
-        
+
     }
     
     
@@ -2725,8 +2707,7 @@ int fun_eval_clenshaw_vec ( struct fun *fun , const double *x , unsigned int m ,
  
 double fun_eval_bary ( struct fun *fun , double x ) {
 
-    int k;
-    double w, u = 0.0, v = 0.0, m, ih;
+    double res, m, ih;
     
     /* Check for nonsense. */
     if ( fun == NULL ) {
@@ -2738,12 +2719,6 @@ double fun_eval_bary ( struct fun *fun , double x ) {
         return NAN;
         }
         
-    /* Check for the simplest cases. */
-    if ( fun->n == 0 )
-        return 0.0;
-    else if ( fun->n == 1 )
-        return fun->vals.real[0];
-        
     /* Map x to the interval [-1,1]. */
     m = ( fun->a + fun->b ) * 0.5;
     ih = 2.0 / ( fun->b - fun->a );
@@ -2753,32 +2728,12 @@ double fun_eval_bary ( struct fun *fun , double x ) {
     if ( !( fun->flags & fun_flag_haspts ) && ( fun_points( fun ) < 0 ) )
         return error(fun_err);
         
-    /* Do the barycentric form in place. */
-    /* Do the first node separately due to the half-weight. */
-    if ( x == fun->points[0] )
-        return fun->vals.real[0];
-    w = 0.5 / ( x - fun->points[0] );
-    u = fun->vals.real[0] * w;
-    v = w;
-
-    /* Do the interior nodes. */
-    for ( k = 1 ; k < fun->n-1 ; k++ ) {
-        if ( x == fun->points[k] )
-            return fun->vals.real[k];
-        w = (double)( 1 - 2 * ( k & 1 ) ) / ( x - fun->points[k] );
-        u += fun->vals.real[k] * w;
-        v += w;
-        }
+    /* Call util_bary_real. */
+    if ( isnan( res = util_bary_real( fun->vals.real , fun->points , fun->n , x ) ) )
+        return error(fun_err_util);
         
-    /* Do the last node separately due to the half-weight. */
-    if ( x == fun->points[k] )
-        return fun->vals.real[k];
-    w = ( 0.5 - ( k & 1 ) ) / ( x - fun->points[k] );
-    u += fun->vals.real[k] * w;
-    v += w;
-
-    /* Return the fraction. */
-    return u / v;
+    /* Return the result. */
+    return res;
 
     }
     
@@ -2800,8 +2755,8 @@ double fun_eval_bary ( struct fun *fun , double x ) {
  
 int fun_eval_bary_vec ( struct fun *fun , const double *x , unsigned int m , double *out ) {
 
-    int j, k;
-    double w, u, v, xj, mi, ih;
+    int j;
+    double mi, ih, *xj;
     
     /* Check for nonsense. */
     if ( fun == NULL || x == NULL || out == NULL )
@@ -2809,75 +2764,25 @@ int fun_eval_bary_vec ( struct fun *fun , const double *x , unsigned int m , dou
     if ( !( fun->flags & fun_flag_init ) )
         return error(fun_err_uninit);
         
-    /* Check for the simplest cases. */
-    if ( fun->n < 2 ) {
-        if ( fun->n == 0 )
-            for ( k = 0 ; k < m ; k++ )
-                out[k] = 0.0;
-        else
-            for ( k = 0 ; k < m ; k++ )
-                out[k] = fun->vals.real[0];
-        return fun_err_ok;
+    /* Create and adjust the xj. */
+    if ( fun->a == -1.0 && fun->b == 1.0 )
+        xj = (double *)x;
+    else {
+        mi = ( fun->a + fun->b ) * 0.5;
+        ih = 2.0 / ( fun->b - fun->a );
+        if ( ( xj = (double *)alloca( sizeof(double) * m ) ) == NULL )
+            return error(fun_err_malloc);
+        for ( j = 0 ; j < m ; j++ )
+            xj[j] = ( x[j] - mi ) * ih;
         }
-        
-    /* Get the centre and width of the interval. */
-    mi = ( fun->a + fun->b ) * 0.5;
-    ih = 2.0 / ( fun->b - fun->a );
     
     /* Get the Chebyshev points, if needed. */
     if ( !( fun->flags & fun_flag_haspts ) && ( fun_points( fun ) < 0 ) )
         return error(fun_err);
         
-    /* For each element of x... */
-    for ( j = 0 ; j < m ; j++ ) {
-    
-        /* Init u and w. */
-        u = 0.0; w = 0.0;
-        
-        /* Map x[j] back to the [-1,1] interval. */
-        xj = ( x[j] - mi ) * ih;
-    
-        /* Do the barycentric form in place. */
-        /* Do the first node separately due to the half-weight. */
-        if ( xj == fun->points[0] ) {
-            out[j] = fun->vals.real[0];
-            continue;
-            }
-        w = 0.5 / ( xj - fun->points[0] );
-        u = fun->vals.real[0] * w;
-        v = w;
-        
-        /* Do the interior nodes. */
-        for ( k = 1 ; k < fun->n-1 ; k++ ) {
-            if ( x[j] == fun->points[k] )
-                break;
-            w = (double)( 1 - 2 * ( k & 1 ) ) / ( xj - fun->points[k] );
-            u += fun->vals.real[k] * w;
-            v += w;
-            }
-            
-        /* Did the loop terminate ok? */
-        if ( k == fun->n-1 ) {
-        
-            /* Get the last node/weight. */
-            if ( xj == fun->points[k] ) {
-                out[j] = fun->vals.real[k];
-                continue;
-                }
-            w = ( 0.5 - ( k & 1 ) ) / ( xj - fun->points[k] );
-            u += fun->vals.real[k] * w;
-            v += w;
-            
-            /* Store the result. */
-            out[j] = u / v;
-            
-            }
-            
-        /* Otherwise, store the result where the loop failed. */
-        else
-            out[j] = fun->vals.real[k];
-        
-        }
+    /* Call util_bary_vec_real. */
+    if ( util_bary_vec_real( fun->vals.real , fun->points , fun->n , xj , out , m ) < 0 )
+        return error(fun_err_util);
         
     /* All is well... */
     return fun_err_ok;
@@ -2899,7 +2804,7 @@ int fun_points ( struct fun *fun ) {
         
     /* Allocate an array for the points if needed. */
     if ( fun->points == NULL )
-        if ( ( fun->points = (double *)malloc( sizeof(double) * fun->size ) ) == NULL )
+        if ( posix_memalign( (void **)&(fun->points) , 16 , sizeof(double) * fun->size ) != 0 )
             return error(fun_err_malloc);
             
     /* Fill the points. */

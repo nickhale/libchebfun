@@ -45,7 +45,225 @@ const char *util_err_msg[] = {
 
 /* Define a macro to store the errors. */
 #define error( id )     ( util_err = errs_register( id , util_err_msg[-id] , __LINE__ , __FUNCTION__ , __FILE__ ) )
-   
+
+
+/**
+ * @brief Evaluate a polynomial using Barycentric interpolation
+ *
+ * @param vals A pointer to an array of values.
+ * @param points A pointer to an array of nodes (may be @c NULL).
+ * @param N The number of coefficients.
+ * @param x The position at which to evaluate the polynomial.
+ * @return The polynomial evaluated at @c x or @c NaN if an error occured
+ *      (see #util_err).
+ *
+ * @note Even when @c points are supplied, they are assumed to be the
+ * Chebyshev nodes on @f$[-1,1]@f$!
+ *
+ * @sa util_clenshaw_vec
+ */
+ 
+double util_bary_real ( const double *vals , const double *points , unsigned int N , double x ) {
+
+    int k;
+    double w, u = 0.0, v = 0.0;
+    
+    /* Check for nonsense. */
+    if ( N != 0 && vals == NULL ) {
+        error(util_err_null);
+        return NAN;
+        }
+
+    /* Check for the simplest cases. */
+    if ( N == 0 )
+        return 0.0;
+    else if ( N == 1 )
+        return vals[0];
+        
+    /* Get the Chebyshev points, if needed. */
+    if ( points == NULL ) {
+        if ( ( points = (double *)alloca( sizeof(double) * N ) ) == NULL ) {
+            error(util_err_malloc);
+            return NAN;
+            }
+        util_chebpts( N , (double *)points );
+        }
+        
+    /* Do the barycentric form in place. */
+    /* Do the first node separately due to the half-weight. */
+    if ( x == points[0] )
+        return vals[0];
+    w = 0.5 / ( x - points[0] );
+    u = vals[0] * w;
+    v = w;
+
+    /* Do the interior nodes. */
+    for ( k = 1 ; k < N-1 ; k++ ) {
+        if ( x == points[k] )
+            return vals[k];
+        w = (double)( 1 - 2 * ( k & 1 ) ) / ( x - points[k] );
+        u += vals[k] * w;
+        v += w;
+        }
+        
+    /* Do the last node separately due to the half-weight. */
+    if ( x == points[k] )
+        return vals[k];
+    w = ( 0.5 - ( k & 1 ) ) / ( x - points[k] );
+    u += vals[k] * w;
+    v += w;
+
+    /* Return the fraction. */
+    return u / v;
+
+    }
+    
+    
+/**
+ * @brief Evaluate a polynomial using Barycentric interpolation
+ *
+ * @param vals A pointer to an array of values.
+ * @param points A pointer to an array of nodes (may be @c NULL).
+ * @param N The number of coefficients.
+ * @param x A pointer to the positions at which to evaluate the polynomial.
+ * @param M The number of points in @c x.
+ * @return The polynomial evaluated at @c x or @c NaN if an error occured
+ *      (see #util_err).
+ *
+ * @note Even when @c points are supplied, they are assumed to be the
+ * Chebyshev nodes on @f$[-1,1]@f$!
+ *
+ * @sa util_bary_real, util_clenshaw_vec
+ */
+ 
+double util_bary_vec_real ( const double *vals , const double *points , unsigned int N , const double *x , double *out , unsigned int M ) {
+
+    int j, k, start = 0, l, r, m;
+    double w, u = 0.0, v = 0.0, xj;
+    #ifdef __SSE2__
+    union {
+        double f[2];
+        unsigned long long i[2];
+        __v2df v;
+        } w2, u2, v2, xj2, pts2;
+    #endif
+    
+    /* Check for nonsense. */
+    if ( N != 0 && vals == NULL )
+        return error(util_err_null);
+
+    /* Check for the simplest cases. */
+    if ( N == 0 ) {
+        for ( k = 0 ; k < M ; k++ )
+            out[k] = 0.0;
+        return util_err_ok;
+        }
+    else if ( N == 1 ) {
+        for ( k = 0 ; k < M ; k++ )
+            out[k] = vals[0];
+        return util_err_ok;
+        }
+        
+    /* Get the Chebyshev points, if needed. */
+    if ( points == NULL ) {
+        if ( ( points = (double *)alloca( sizeof(double) * N ) ) == NULL )
+            return error(util_err_malloc);
+        util_chebpts( N , (double *)points );
+        }
+        
+    #ifdef __SSE2__
+    
+        /* Check if x and out are properly aligned. */
+        if ( ((size_t)x & 15) == 0 && ((size_t)out & 15) == 0 ) {
+        
+            /* Loop through the x in chunks of two. */
+            for ( start = 0 ; start < (int)M-3 ; start += 2 ) {
+            
+                /* Get the pair for xj. */
+                xj2.v = _mm_load_pd( &x[start] );
+            
+                /* Do the barycentric form in place. */
+                /* Do the first node separately due to the half-weight. */
+                pts2.v = _mm_set1_pd( points[0] );
+                w2.v = _mm_div_pd( _mm_set1_pd( 0.5 ) , _mm_sub_pd( xj2.v , pts2.v ) );
+                u2.v = _mm_mul_pd( _mm_set1_pd( vals[0] ) , w2.v );
+                v2.v = w2.v;
+
+                /* Do the interior nodes. */
+                for ( k = 1 ; k < N-1 ; k++ ) {
+                    pts2.v = _mm_set1_pd( points[k] );
+                    w2.v = _mm_div_pd( _mm_set1_pd( (double)( 1 - 2 * ( k & 1 ) ) ) , _mm_sub_pd( xj2.v , pts2.v ) );
+                    u2.v = _mm_add_pd( u2.v , _mm_mul_pd( _mm_set1_pd( vals[k] ) , w2.v ) );
+                    v2.v = _mm_add_pd( v2.v , w2.v );
+                    }
+
+                /* Do the last node separately due to the half-weight. */
+                pts2.v = _mm_set1_pd( points[k] );
+                w2.v = _mm_div_pd( _mm_set1_pd( (double)( 0.5 - ( k & 1 ) ) ) , _mm_sub_pd( xj2.v , pts2.v ) );
+                u2.v = _mm_add_pd( u2.v , _mm_mul_pd( _mm_set1_pd( vals[k] ) , w2.v ) );
+                v2.v = _mm_add_pd( v2.v , w2.v );
+                
+                /* Store the results. */
+                _mm_store_pd( &out[start] , _mm_div_pd( u2.v , v2.v ) );
+
+                }
+
+            }
+    
+    #endif
+    
+    /* Otherwise, no fancy SSE-stuff or get leftovers. */
+    for ( j = start ; j < M ; j++ ) {
+    
+        /* Do the barycentric form in place. */
+        /* Do the first node separately due to the half-weight. */
+        xj = x[j];
+        w = 0.5 / ( xj - points[0] );
+        u = vals[0] * w;
+        v = w;
+
+        /* Do the interior nodes. */
+        for ( k = 1 ; k < N-1 ; k++ ) {
+            w = (double)( 1 - 2 * ( k & 1 ) ) / ( xj - points[k] );
+            u += vals[k] * w;
+            v += w;
+            }
+
+        /* Do the last node separately due to the half-weight. */
+        w = ( 0.5 - ( k & 1 ) ) / ( xj - points[k] );
+        u += vals[k] * w;
+        v += w;
+        
+        /* Store the result. */
+        out[j] = u / v;
+        
+        }
+        
+    /* Run through out and look for non-numerical values. */
+    for ( j = 0 ; j < M ; j++ )
+        if ( ~isfinite( out[j] ) ) {
+        
+            /* Look for x[j] in points (bisection). */
+            l = -1; r = N;
+            while ( l < r-1 ) {
+                m = (l + r) / 2;
+                if ( points[m] > x[j] )
+                    l = m;
+                else if ( points[m] < x[j] )
+                    r = m;
+                else {
+                    out[j] = vals[m];
+                    break;
+                    }
+                }
+                
+            }
+
+    /* Happy end. */
+    return util_err_ok;
+
+    }
+    
     
 /**
  * @brief Evaluate a polynomial using the Clenshaw algorithm.
@@ -62,7 +280,7 @@ const char *util_err_msg[] = {
 double util_clenshaw ( double *coeffs , unsigned int N , double x ) {
 
     int k;
-    double yn = 0.0, ynp1 = 0.0, ynp2;
+    double yn = 0.0, ynp1 = 0.0, ynp2, x2 = 2*x;
 
     /* Check for nonsense. */
     if ( coeffs == NULL ) {
@@ -77,9 +295,9 @@ double util_clenshaw ( double *coeffs , unsigned int N , double x ) {
         return coeffs[0];
         
     /* Evaluate the recurrence. */
-    for ( k = N ; k >= 0 ; k-- ) {
+    for ( k = N-1 ; k >= 0 ; k-- ) {
         ynp2 = ynp1; ynp1 = yn;
-        yn = coeffs[k] + 2 * x * ynp1 - ynp2;
+        yn = coeffs[k] + x2 * ynp1 - ynp2;
         }
         
     /* Return the result. */
@@ -106,11 +324,13 @@ double util_clenshaw ( double *coeffs , unsigned int N , double x ) {
 
 int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned int M , double *out ) {
 
-    int j, k;
+    int j, k, start = 0;
     #ifdef __SSE2__
-        __v2df vxj, vyn, vynp1, vynp2, vtwo = _mm_set1_pd( 2.0 );
+        __v2df vxj_1, vyn_1, vynp1_1, vynp2_1;
+        __v2df vxj_2, vyn_2, vynp1_2, vynp2_2;
+        __v2df c, half = _mm_set1_pd( 0.5 ), two = _mm_set1_pd( 2.0 );
     #endif
-    double yn, ynp1, ynp2;
+    double yn, ynp1, ynp2, x2;
 
     /* Check for nonsense. */
     if ( coeffs == NULL || x == NULL || out == NULL )
@@ -132,61 +352,77 @@ int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned i
     /* Are all the values aligned correctly? */
     if ( ((size_t)x) % 16 == 0 && ((size_t)out) % 16 == 0 ) {
     
-        for ( j = 0 ; j < M - 1 ; j += 2 ) {
+        /* Take two chunks at a time. */
+        for ( start = 0 ; start < (int)M-3 ; start += 4 ) {
 
             /* Init the recurrence. */
-            vxj = _mm_load_pd( &(x[j]) );
-            vxj = _mm_mul_pd( vxj , vtwo );
-            vynp1 = _mm_setzero_pd();
-            vyn = _mm_setzero_pd();
+            vxj_1 = _mm_load_pd( &(x[start]) );
+            vxj_2 = _mm_load_pd( &(x[start+2]) );
+            vxj_1 = _mm_mul_pd( vxj_1 , two );
+            vxj_2 = _mm_mul_pd( vxj_2 , two );
+            vynp1_1 = _mm_setzero_pd();
+            vynp1_2 = _mm_setzero_pd();
+            vyn_1 = _mm_setzero_pd();
+            vyn_2 = _mm_setzero_pd();
 
             /* Evaluate the recurrence. */
             for ( k = N-1 ; k >= 0 ; k-- ) {
-                vynp2 = vynp1; vynp1 = vyn;
-                vyn = _mm_add_pd( _mm_load1_pd( &(coeffs[k]) ) , _mm_sub_pd( _mm_mul_pd( vxj , vynp1 ) , vynp2 ) );
+                vynp2_1 = vynp1_1; vynp1_1 = vyn_1;
+                vynp2_2 = vynp1_2; vynp1_2 = vyn_2;
+                c = _mm_set1_pd( coeffs[k] );
+                vyn_1 = _mm_add_pd( c , _mm_sub_pd( _mm_mul_pd( vxj_1 , vynp1_1 ) , vynp2_1 ) );
+                vyn_2 = _mm_add_pd( c , _mm_sub_pd( _mm_mul_pd( vxj_2 , vynp1_2 ) , vynp2_2 ) );
                 }
 
             /* store the result. */
-            _mm_store_pd( &(out[j]) , _mm_sub_pd( vyn , _mm_mul_pd( _mm_mul_pd( _mm_set1_pd( 0.5 ) , vxj ) , vynp1 ) ) );
+            _mm_store_pd( &(out[start]) , _mm_sub_pd( vyn_1 , _mm_mul_pd( _mm_mul_pd( half , vxj_1 ) , vynp1_1 ) ) );
+            _mm_store_pd( &(out[start+2]) , _mm_sub_pd( vyn_2 , _mm_mul_pd( _mm_mul_pd( half , vxj_2 ) , vynp1_2 ) ) );
 
             }
             
-        /* Leftovers? */
-        if ( j < M ) {
-            ynp1 = 0.0; yn = 0.0;
+        /* Two or more left? */
+        if ( start < (int)M-1 ) {
+
+            /* Init the recurrence. */
+            vxj_1 = _mm_load_pd( &(x[start]) );
+            vxj_1 = _mm_mul_pd( vxj_1 , two );
+            vynp1_1 = _mm_setzero_pd();
+            vyn_1 = _mm_setzero_pd();
+
+            /* Evaluate the recurrence. */
             for ( k = N-1 ; k >= 0 ; k-- ) {
-                ynp2 = ynp1; ynp1 = yn;
-                yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
+                vynp2_1 = vynp1_1; vynp1_1 = vyn_1;
+                vyn_1 = _mm_add_pd( _mm_set1_pd( coeffs[k] ) , _mm_sub_pd( _mm_mul_pd( vxj_1 , vynp1_1 ) , vynp2_1 ) );
                 }
-            out[j] = yn - x[j] * ynp1;
+
+            /* store the result. */
+            _mm_store_pd( &(out[start]) , _mm_sub_pd( vyn_1 , _mm_mul_pd( _mm_mul_pd( half , vxj_1 ) , vynp1_1 ) ) );
+
             }
             
         }
+    #endif
+      
             
     /* Otherwise, no SSE-stuff. */
-    else {
-    #endif
-    
-        for ( j = 0 ; j < M ; j++ ) {
+    for ( j = start ; j < M ; j++ ) {
 
-            /* Init the recurrence. */
-            ynp1 = 0.0; yn = 0.0;
+        /* Init the recurrence. */
+        x2 = 2 * x[j];
+        ynp1 = 0.0; yn = 0.0;
 
-            /* Evaluate the recurrence. */
-            for ( k = N-1 ; k >= 0 ; k-- ) {
-                ynp2 = ynp1; ynp1 = yn;
-                yn = coeffs[k] + 2 * x[j] * ynp1 - ynp2;
-                }
-
-            /* store the result. */
-            out[j] = yn - x[j] * ynp1;
-
+        /* Evaluate the recurrence. */
+        for ( k = N-1 ; k >= 0 ; k-- ) {
+            ynp2 = ynp1; ynp1 = yn;
+            yn = coeffs[k] + x2 * ynp1 - ynp2;
             }
-            
-    #ifdef __SSE2__
+
+        /* store the result. */
+        out[j] = yn - 0.5 * x2 * ynp1;
+
         }
-    #endif
         
+            
     /* If all went well... */
     return util_err_ok;
         
@@ -201,7 +437,7 @@ int util_clenshaw_vec ( double *coeffs , unsigned int N , double *x , unsigned i
  * @return Pointer to the matrix (stored as a vector)..
  */
 
-double * util_diffmat ( unsigned int N ) {
+double *util_diffmat ( unsigned int N ) {
 
     double *x, *w, *D, s, val, xj, wj;
     int j, k, sgn = 1.0; 
@@ -294,7 +530,7 @@ double * util_diffmat ( unsigned int N ) {
 int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps ) {
 
     int k, tail;
-    double temp, tail_max, diff_max, dx, pin, wc, ws;
+    double temp, tail_max, diff_max, dx, cos_new, pin, cos_last;
     
     /* The usual checks and balances. */
     if ( v == NULL || coeffs == NULL )
@@ -310,10 +546,12 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
 
     /* Get the maximum tail magnitude. */
     diff_max = 0.0;
-    pin = M_PI / (N - 1); wc = cos( pin ) - 1.0; ws = sin( pin );
+    pin = M_PI / (N - 1); cos_last = 1.0;
     for ( k = 1 ; k < N ; k++ ) {
         temp = fabs( v[k] - v[k-1] );
-        dx = cos( pin * k ) * wc + sin( pin * k ) * ws;
+        cos_new = cos( k * pin );
+        dx = cos_last - cos_new;
+        cos_last = cos_new;
         if ( dx > 2 * DBL_EPSILON )
             temp /= dx;
         else

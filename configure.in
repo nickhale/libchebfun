@@ -26,15 +26,15 @@ AC_PROG_LIBTOOL
 AM_CONFIG_HEADER(config.h)
 
 # compiler settings
-# CFLAGS=-Wall $(CFLAGS)
+CFLAGS="-Wall $(CFLAGS)"
 
 # find and test the compiler
 AC_PROG_CC
 AC_LANG_C
 # AX_CC_MAXOPT
 AX_FUNC_POSIX_MEMALIGN
-# AX_GCC_ARCHFLAG([no])
-# AX_EXT
+AX_GCC_ARCHFLAG([no])
+AX_EXT
 
 # autoconf stuff
 AC_PROG_INSTALL
