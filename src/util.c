@@ -138,7 +138,7 @@ double util_bary_real ( const double *vals , const double *points , unsigned int
  
 double util_bary_vec_real ( const double *vals , const double *points , unsigned int N , const double *x , double *out , unsigned int M ) {
 
-    int j, k, start = 0, l, r, m;
+    int j, k, start = 0;
     double w, u = 0.0, v = 0.0, xj;
     #ifdef __SSE2__
     union {
@@ -241,21 +241,10 @@ double util_bary_vec_real ( const double *vals , const double *points , unsigned
         
     /* Run through out and look for non-numerical values. */
     for ( j = 0 ; j < M ; j++ )
-        if ( ~isfinite( out[j] ) ) {
+        if ( !isfinite( out[j] ) ) {
         
-            /* Look for x[j] in points (bisection). */
-            l = -1; r = N;
-            while ( l < r-1 ) {
-                m = (l + r) / 2;
-                if ( points[m] > x[j] )
-                    l = m;
-                else if ( points[m] < x[j] )
-                    r = m;
-                else {
-                    out[j] = vals[m];
-                    break;
-                    }
-                }
+            /* Map x[j] back to the corresponding point. */
+            out[j] = vals[ (int)round( acos( x[j] ) / M_PI * (N-1) ) ];
                 
             }
 
@@ -568,6 +557,7 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
     tail_max *= DBL_EPSILON;
     if ( tail_max < eps )
         tail_max = eps;
+    tail_max *= vscale;
         
     /* Get the index of the last coefficient |coeffs[k]| < tail_max. */
     for ( k = N-1 ; k >= 0 && fabs(coeffs[k]) < tail_max ; k-- );
@@ -593,7 +583,7 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
         
         /* Get the new values. */
         if ( util_chebpolyval( coeffs , N , v ) < 0 )
-            return util_err;
+            return error(util_err);
             
         }
         

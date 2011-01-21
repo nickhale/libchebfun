@@ -594,7 +594,7 @@ int chebtest_polytest ( char **name ) {
         
     /* Set the function name. */
     *name = "polytest";
-        
+    
     /* Create the fun. */
     if ( fun_create_vec( &f , &thefun , 2.0 , 10.0 , NULL ) < 0 )
         return FAIL;
@@ -619,8 +619,9 @@ int chebtest_polytest ( char **name ) {
             v[k] = 1.0 + x[k]*2.0;
         return 0;
         }
+        
     /* Create the fun. */
-    if ( fun_create_vec( &f , &thefun , 2.0 , 10.0 , NULL ) < 0 )
+    if ( fun_create_vec( &f , &thefun2 , 2.0 , 10.0 , NULL ) < 0 )
         return FAIL;
 
     /* Create some space for the coefficients. */
@@ -890,7 +891,7 @@ int main ( int argc , char *argv[] ) {
             /* Call the kth chebtest. */
             res = (*tests[k])( &name );
 
-            /* Be verbose about the result. */
+            /* Be verbose about the result, but only on the first round. */
             if ( j == 0 ) {
                 if ( res != PASS ) {
                     printf("chebtest: test %s failed on line %i of file %s.\n", name, -res, __FILE__ );

@@ -3179,7 +3179,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         
         /* Check convergence of the coefficients. */
         if ( ( N_new = util_simplify( v , coeffs , N , 2*h , scale , chebopts_opts->eps ) ) < 0 )
-            return fun_err_util;
+            return error(fun_err_util);
             
         /* TODO: Sampletest? */
             
