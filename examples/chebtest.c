@@ -37,6 +37,133 @@
 
 
 /**
+ * @brief Test the basic arithmetic operators.
+ */
+ 
+int chebtest_arith ( char **name ) {
+
+    int k;
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
+    double xi[100], v[100], tol;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin( x[k] ) + sin( x[k] * x[k] );
+        return 0;
+        }
+        
+    /* Scalar variant for the tests. */
+    inline double eff ( double x ) {
+        return sin( x ) + sin( x * x );
+        }
+        
+    /* Set the function name. */
+    *name = "arith";
+    
+    /* Set the tolerance. */
+    tol = 100 * chebopts_opts->eps;
+    
+    /* Init the random points at which to test the function. */
+    for ( k = 0 ; k < 100 ; k++ )
+        xi[k] = (10.0  * rand()) / RAND_MAX;
+    
+    /* Create f1. */
+    if ( fun_create_vec( &f1 , &thefun , 0.0 , 10.0 , NULL ) < 0 )
+        return FAIL;
+        
+    /* Operations on f1 into f2 */
+    
+    /* Add a constant value. */
+    if ( fun_add_const( &f1 , 1.0 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - (eff(xi[k]) + 1.0) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Add two funs. */
+    if ( fun_add( &f1 , &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - 2*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Add two funs (weighted). */
+    if ( fun_madd( &f1 , 1.0 , &f1 , -0.5 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - 0.5*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Multiply two funs. */
+    if ( fun_mul( &f1 , &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - eff(xi[k])*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Operations on f2 into f2 */
+    
+    /* Add a constant value. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_add_const( &f2 , 1.0 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - (eff(xi[k]) + 1.0) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Add two funs. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_add( &f2 , &f2 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - 2*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Add two funs (weighted). */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_madd( &f2 , 1.0 , &f1 , -0.5 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - 0.5*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* Multiply two funs. */
+    if ( fun_copy( &f1 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_mul( &f1 , &f2 , &f2 ) < 0 )
+        return FAIL;
+    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < 100 ; k++ )
+        if ( fabs( v[k] - eff(xi[k])*eff(xi[k]) ) > f2.scale * tol )
+            return FAIL;
+            
+    /* We made it! */
+    fun_clean(&f1); fun_clean(&f2);
+    return PASS;
+        
+    }
+        
+/**
  * @brief Create Wilkinson's famous polynomial and see if we can
  *      recover the roots.
  */
@@ -552,7 +679,7 @@ int chebtest_cumsumcos100x ( char **name ) {
         return FAIL;
 
     /* Do the first test. */
-    tol = 1e-13*f1.scale*eps;
+    tol = 1e-14*f1.scale*eps;
     norm = fun_err_norm_inf( &f3 , &f2 );
     if ( ( norm  < 0 ) | ( norm > tol ) )
         return FAIL;
@@ -609,7 +736,7 @@ int chebtest_polytest ( char **name ) {
     fun_clean(&f);
 
     for ( k = 0 ; k < f.n ; k++ ) 
-        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e5 )
+        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e4 )
             return FAIL;
 
     /* The 2nd function for which to create a chebfun. */
@@ -634,7 +761,7 @@ int chebtest_polytest ( char **name ) {
     fun_clean(&f);
 
     for ( k = 0 ; k < f.n ; k++ ) 
-        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e5 )
+        if ( fabs( p[k] - (double)(k+1) ) >= chebopts_opts->eps * 1e4 )
             return FAIL;
         
     /* If nothing went wrong, just return 0. */
@@ -792,7 +919,7 @@ int chebtest_rootspol ( char **name ) {
     double *r, *c, tol, err, pr;
     int k, nroots;
 
-    tol = 1e-13 * chebopts_opts->eps / DBL_EPSILON;;
+    tol = 1e-14 * chebopts_opts->eps / DBL_EPSILON;;
     
     /* The function for which to create a chebfun. */
     int thefun ( const double *x , unsigned int N , double *v , void *data ) {
@@ -865,8 +992,9 @@ int chebtest_rootspol ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 12;
-    int (*tests[12])( char ** ) = { &chebtest_sumcos20x , &chebtest_max_min ,
+    const int ntests = 13;
+    int (*tests[13])( char ** ) = { &chebtest_arith, 
+        &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
         &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
         &chebtest_roots , &chebtest_cumsumcos100x , &chebtest_composetest , 

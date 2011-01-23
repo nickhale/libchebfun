@@ -13,16 +13,14 @@ Things to do with functionality:
 * 2011/01/19: Make specific bary and clenshaw routines for real vs. cplx
               fun values and coefficients, let fun_eval do the
               dispatching.
-* 2011/01/21: fun_create_vec does not check if N gets too big.
 
 
 Things to do with performance:
 
-* 2011/01/18: Use SSE/SSE2 instructions in fun_eval_bary_vec to do
-              up to four points at a time, perhaps move to util.c to
-              keep things well separated.
-* 2011/01/20: In util_bary_vec_real, look for hits using not bisection
-              but round( arccos(x[j]) / PI * (N-1) ).
+* 2011/01/23: In util_chebpoly and util_chebpolyval, fftw_plan_r2r_1d takes
+              more time than the actual ffts. Some better way of re-using
+              wisdom or the plans themselves?
+* 2011/01/23: Use fmax/fmin wherever possible.
 
 
 Things to do with testing:

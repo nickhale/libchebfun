@@ -54,7 +54,8 @@ const char *fun_err_msg[] = {
     "The funs do not span the same domain or operation requested outside of domain.",
     "Requested operation is not yet implemented.",
     "A call to LAPACK ended in a calamity.",
-    "A call to GNUPLOT wasn't very cool." };
+    "A call to GNUPLOT wasn't very cool.",
+    "The constructor failed to converge." };
     
 /* Define a macro to store the errors. */
 #define error( id )     ( fun_err = errs_register( id , fun_err_msg[-id] , __LINE__ , __FUNCTION__ , __FILE__ ) )
@@ -3050,7 +3051,7 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     unsigned int N;
     static double *xi = NULL;
     static int nr_xi = 0;
-    int k, stride, N_new;
+    int k, stride, N_new, res = fun_err_ok;
     
     /* Check inputs. */
     if ( fun == NULL || fx == NULL )
@@ -3192,9 +3193,17 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
         /* No convergence, adjust N. */
         if ( ( chebopts_opts->flags & chebopts_flag_resampling ) && 
              ( N < 64 ) )
-            N = (int)( ( N - 1 ) * M_SQRT2 + 1 ) | 1;
+            N_new = (int)( ( N - 1 ) * M_SQRT2 + 1 ) | 1;
         else
-            N = 2 * N - 1;
+            N_new = 2 * N - 1;
+            
+        /* If N is larger than maxdegree, break with an error. */
+        if ( N_new > chebopts_opts->maxdegree+1 ) {
+            res = error(fun_err_converge);
+            break;
+            }
+        else
+            N = N_new;
         
         } /* Main loop. */
         
@@ -3211,6 +3220,6 @@ int fun_create_vec ( struct fun *fun , int (*fx)( const double * , unsigned int 
     fun->b = b;
     
     /* If nothing bad happened until here, we're done! */
-    return fun_err_ok;
+    return res;
 
     }

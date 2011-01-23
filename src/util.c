@@ -518,8 +518,9 @@ double *util_diffmat ( unsigned int N ) {
  
 int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale , double vscale , double eps ) {
 
-    int k, tail;
+    int j, k, tail;
     double temp, tail_max, diff_max, dx, cos_new, pin, cos_last;
+    double rmaxc, bpb, rmaxbpb;
     
     /* The usual checks and balances. */
     if ( v == NULL || coeffs == NULL )
@@ -548,7 +549,7 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
         if ( temp > diff_max )
             diff_max = temp;
         }
-    diff_max /= vscale;
+    diff_max *= 2.0 / vscale;
     tail_max = pow( tail , 2.0/3.0 );
     if ( tail_max < diff_max )
         tail_max = diff_max;
@@ -558,7 +559,7 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
     if ( tail_max < eps )
         tail_max = eps;
     tail_max *= vscale;
-        
+
     /* Get the index of the last coefficient |coeffs[k]| < tail_max. */
     for ( k = N-1 ; k >= 0 && fabs(coeffs[k]) < tail_max ; k-- );
     
@@ -577,9 +578,26 @@ int util_simplify ( double *v , double *coeffs , unsigned int N , double hscale 
     /* Is the tail long enough? */
     else if ( N - k > tail ) {
     
-        /* For now, just use k+1... */
-        /* TODO: actually implement the strategy from simplify.m! */
-        N = k+1;
+        /* Init the running maximum coefficient and bang per buck. */
+        rmaxc = 0.225 * eps;
+        rmaxbpb = 0.0;
+        
+        /* Loop over the truncated coefficients backwards... */
+        for ( j = N-1 ; j > k ; j-- ) {
+        
+            /* Update the running maximum of the coeffs. */
+            rmaxc = fmax( rmaxc , fabs(coeffs[j]) );
+        
+            /* Compute the bang per buck for the jth coefficient. */
+            bpb = log( 1000 * tail_max / rmaxc ) / j;
+            
+            /* Update max bang per buck. */
+            if ( bpb > rmaxbpb ) {
+                N = j;
+                rmaxbpb = bpb;
+                }
+        
+            }
         
         /* Get the new values. */
         if ( util_chebpolyval( coeffs , N , v ) < 0 )

@@ -49,6 +49,7 @@
 #define fun_err_nyi                     -8
 #define fun_err_lapack                  -9
 #define fun_err_gnuplot                 -10
+#define fun_err_converge                -11
 
 
 /* Global, external variables. */
