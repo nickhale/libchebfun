@@ -886,7 +886,7 @@ int fun_min ( struct fun *fun , double *miny , double *minx ) {
 int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy , double *maxx ) {
 	
     struct fun fp = FUN_EMPTY;
-	double *roots, *vals, valR;
+	double *roots, *vals, valR, in[2], out[2];
 	int j;
 	int nroots;
     
@@ -914,7 +914,10 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
 	
 	/* Find the maximum */
     /* TODO: call fun_eval_clenshaw_vec... */
-	*miny = fun_eval_clenshaw( fun , fun->a ); 
+    in[0] = fun->a; in[1] = fun->b;
+    if ( fun_eval_vec( fun , in , 2 , out ) < 0 )
+        return error(fun_err);
+    *miny = out[0];
 	*minx = fun->a;
 	for ( j = 0 ; j < nroots ; j++ ) {
 		if ( vals[j] < *miny ) {
@@ -922,14 +925,14 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
 			*minx = roots[j];
 			}
 		}
-	valR = fun_eval_clenshaw( fun , fun->b );
+	valR = out[1];
 	if ( valR < *miny ) {
 		*miny = valR;
 		*minx = fun->b;
 		}
 
 	/* Find the maximum */
-	*maxy = fun_eval_clenshaw( fun , fun->a ); 
+	*maxy = out[0]; 
 	*maxx = fun->a;
 	for ( j = 0 ; j < nroots ; j++ ) {
 		if ( vals[j] > *maxy ) {
@@ -937,7 +940,7 @@ int fun_minandmax ( struct fun *fun , double *miny , double *minx , double *maxy
 			*maxx = roots[j];
 			}
 		}
-	valR = fun_eval_clenshaw( fun , fun->b );
+	valR = out[1];
 	if ( valR > *maxy ) {
 		*maxy = valR;
 		*maxx = fun->b;

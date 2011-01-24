@@ -37,14 +37,15 @@
 
 
 /**
- * @brief Test the basic arithmetic operators.
+ * @brief Test the evaluation routines.
  */
  
-int chebtest_arith ( char **name ) {
+int chebtest_eval ( char **name ) {
 
+    const int N = 200;
     int k;
-    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
-    double xi[100], v[100], tol;
+    struct fun f1 = FUN_EMPTY;
+    double xi[N], v_ex[N], v[N], tol;
     
     /* The function for which to create a chebfun. */
     int thefun ( const double *x , unsigned int N , double *v , void *data ) {
@@ -54,9 +55,69 @@ int chebtest_arith ( char **name ) {
         return 0;
         }
         
-    /* Scalar variant for the tests. */
-    inline double eff ( double x ) {
-        return sin( x ) + sin( x * x );
+    /* Set the function name. */
+    *name = "eval";
+    
+    /* Set the tolerance. */
+    tol = 100 * chebopts_opts->eps;
+    
+    /* Init the random points at which to test the function. */
+    for ( k = 0 ; k < N ; k++ )
+        xi[k] = (10.0  * rand()) / RAND_MAX;
+    thefun( xi , N , v_ex , NULL );
+    
+    /* Create f1. */
+    if ( fun_create_vec( &f1 , &thefun , 0.0 , 10.0 , NULL ) < 0 )
+        return FAIL;
+        
+    /* Evaluate it using point-wise barycentric evaluation. */
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( fun_eval_bary( &f1 , xi[k] ) - v_ex[k] ) > tol )
+            return FAIL;
+        
+    /* Evaluate it using point-wise clenshaw evaluation. */
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( fun_eval_clenshaw( &f1 , xi[k] ) - v_ex[k] ) > tol )
+            return FAIL;
+            
+    /* Evaluate f1 using vectorized barycentric evaluation. */
+    if ( fun_eval_bary_vec( &f1 , xi , N , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - v_ex[k] ) > tol )
+            return FAIL;
+        
+    /* Evaluate f1 using vectorized clenshaw evaluation. */
+    if ( fun_eval_clenshaw_vec( &f1 , xi , N , v ) < 0 )
+        return FAIL;
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - v_ex[k] ) > tol )
+            return FAIL;
+        
+    /* Pass go, collect $200. */
+    return PASS;
+    
+    }
+    
+
+
+/**
+ * @brief Test the basic arithmetic operators.
+ */
+ 
+int chebtest_arith ( char **name ) {
+
+    const int N = 200;
+    int k;
+    struct fun f1 = FUN_EMPTY, f2 = FUN_EMPTY;
+    double xi[N], v_ex[N], v[N], tol;
+    
+    /* The function for which to create a chebfun. */
+    int thefun ( const double *x , unsigned int N , double *v , void *data ) {
+        int k;
+        for ( k = 0 ; k < N ; k++ )
+            v[k] = sin( x[k] ) + sin( x[k] * x[k] );
+        return 0;
         }
         
     /* Set the function name. */
@@ -66,8 +127,9 @@ int chebtest_arith ( char **name ) {
     tol = 100 * chebopts_opts->eps;
     
     /* Init the random points at which to test the function. */
-    for ( k = 0 ; k < 100 ; k++ )
+    for ( k = 0 ; k < N ; k++ )
         xi[k] = (10.0  * rand()) / RAND_MAX;
+    thefun( xi , N , v_ex , NULL );
     
     /* Create f1. */
     if ( fun_create_vec( &f1 , &thefun , 0.0 , 10.0 , NULL ) < 0 )
@@ -78,37 +140,37 @@ int chebtest_arith ( char **name ) {
     /* Add a constant value. */
     if ( fun_add_const( &f1 , 1.0 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - (eff(xi[k]) + 1.0) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - (v_ex[k] + 1.0) ) > f2.scale * tol )
             return FAIL;
             
     /* Add two funs. */
     if ( fun_add( &f1 , &f1 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - 2*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - 2*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* Add two funs (weighted). */
     if ( fun_madd( &f1 , 1.0 , &f1 , -0.5 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - 0.5*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - 0.5*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* Multiply two funs. */
     if ( fun_mul( &f1 , &f1 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - eff(xi[k])*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - v_ex[k]*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* Operations on f2 into f2 */
@@ -118,10 +180,10 @@ int chebtest_arith ( char **name ) {
         return FAIL;
     if ( fun_add_const( &f2 , 1.0 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - (eff(xi[k]) + 1.0) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - (v_ex[k] + 1.0) ) > f2.scale * tol )
             return FAIL;
             
     /* Add two funs. */
@@ -129,10 +191,10 @@ int chebtest_arith ( char **name ) {
         return FAIL;
     if ( fun_add( &f2 , &f2 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - 2*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - 2*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* Add two funs (weighted). */
@@ -140,10 +202,10 @@ int chebtest_arith ( char **name ) {
         return FAIL;
     if ( fun_madd( &f2 , 1.0 , &f1 , -0.5 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - 0.5*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - 0.5*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* Multiply two funs. */
@@ -151,10 +213,10 @@ int chebtest_arith ( char **name ) {
         return FAIL;
     if ( fun_mul( &f1 , &f2 , &f2 ) < 0 )
         return FAIL;
-    if ( fun_eval_vec( &f2 , xi , 100 , v ) < 0 )
+    if ( fun_eval_vec( &f2 , xi , N , v ) < 0 )
         return FAIL;
-    for ( k = 0 ; k < 100 ; k++ )
-        if ( fabs( v[k] - eff(xi[k])*eff(xi[k]) ) > f2.scale * tol )
+    for ( k = 0 ; k < N ; k++ )
+        if ( fabs( v[k] - v_ex[k]*v_ex[k] ) > f2.scale * tol )
             return FAIL;
             
     /* We made it! */
@@ -992,8 +1054,8 @@ int chebtest_rootspol ( char **name ) {
 int main ( int argc , char *argv[] ) {
 
     /* Adjust these as you add chebtests. */
-    const int ntests = 13;
-    int (*tests[13])( char ** ) = { &chebtest_arith, 
+    const int ntests = 14;
+    int (*tests[14])( char ** ) = { &chebtest_eval , &chebtest_arith ,
         &chebtest_sumcos20x , &chebtest_max_min ,
         &chebtest_norm2 , &chebtest_norm_inf , &chebtest_prolong ,
         &chebtest_restrict , &chebtest_polytest , &chebtest_simplify ,
