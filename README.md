@@ -9,10 +9,12 @@ I can no longer get the code to compile, but it does still contain a number of C
 
 It might be useful to anyone hoping to implement a C or C++ version of core Chebfun functionality.
 
+
+Installation and requirements
+=============================
+
 Below are the last known set of instructions which produced a successful compile:
 
-
-==========
 
 ```
         cd libchebfun
